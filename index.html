@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1450,5 +1451,41 @@
     setInterval(updateClock, 1000);
     resetIdleTimer();
 </script>
+
+<!-- Enable Sound Button - This fixes browser autoplay blocking -->
+<button id="enableSoundBtn" style="position: fixed; bottom: 50px; right: 10px; z-index: 10000; background: #c0c0c0; border: 2px solid #fff; border-right-color: #000; border-bottom-color: #000; padding: 6px 12px; cursor: pointer; font-family: 'MS Sans Serif', Tahoma, sans-serif; font-size: 11px; box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #FFF;">
+  🔈 Enable Sound
+</button>
+
+<script>
+  // This unlocks audio that browsers block by default
+  const enableBtn = document.getElementById('enableSoundBtn');
+  
+  enableBtn.addEventListener('click', function() {
+    // Create a silent audio context to unlock audio on the page
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const silentBuffer = audioCtx.createBuffer(1, 1, 22050);
+    const source = audioCtx.createBufferSource();
+    source.buffer = silentBuffer;
+    source.connect(audioCtx.destination);
+    source.start();
+    audioCtx.close();
+    
+    enableBtn.style.display = 'none';
+    console.log('✅ Audio unlocked');
+    
+    // Test play the startup sound if checkbox is checked
+    if (document.getElementById('startupSoundToggle')?.checked) {
+      const testAudio = new Audio('sounds/winxp.mp3');
+      testAudio.volume = 0.3;
+      testAudio.play().then(() => {
+        console.log('✅ Startup sound played!');
+      }).catch(e => {
+        console.log('❌ Still blocked:', e);
+      });
+    }
+  });
+</script>
+
 </body>
 </html>
