@@ -298,11 +298,68 @@
         .context-menu-item { padding: 6px 12px; cursor: pointer; font-size: 12px; }
         .context-menu-item:hover { background: #000080; color: white; }
         
+        /* Boot Screen - Full screen, click to enter */
         .boot-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; color: #fff; display: flex; justify-content: center;
-            align-items: center; z-index: 10000; font-family: monospace; font-size: 20px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000000;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10001;
+            font-family: "MS Sans Serif", Tahoma, monospace;
+            cursor: pointer;
+            animation: fadeIn 0.5s ease;
         }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .boot-logo {
+            font-size: 48px;
+            margin-bottom: 30px;
+            font-family: monospace;
+        }
+        
+        .boot-text {
+            font-size: 14px;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+        
+        .boot-dots {
+            font-size: 20px;
+            font-family: monospace;
+            min-width: 60px;
+            text-align: left;
+            display: inline-block;
+        }
+        
+        .boot-subtext {
+            font-size: 11px;
+            margin-top: 40px;
+            color: #888;
+        }
+        
+        .boot-click-hint {
+            font-size: 10px;
+            margin-top: 20px;
+            color: #666;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+        
         .screensaver {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; z-index: 9999; display: none; justify-content: center;
@@ -322,16 +379,28 @@
             .taskbar-window-btn { max-width: 100px; font-size: 10px; }
             .resize-handle { width: 15px; height: 15px; }
             .notes-manager { width: 95%; height: 80%; left: 2.5% !important; top: 10% !important; }
+            .boot-text { font-size: 10px; }
+            .boot-logo { font-size: 32px; }
         }
     </style>
 </head>
 <body>
 
-<div class="desktop" id="desktop">
+<!-- BOOT SCREEN - Must click to enter desktop -->
+<div class="boot-screen" id="bootScreen">
+    <div class="boot-logo">🪟</div>
+    <div class="boot-text">
+        Starting Windows 95<span class="boot-dots" id="bootDots">...</span>
+    </div>
+    <div class="boot-subtext">Microsoft (R) Windows 95</div>
+    <div class="boot-click-hint">▼ Click anywhere to enter ▼</div>
+</div>
+
+<div class="desktop" id="desktop" style="display: none;">
     <div class="icons-container" id="iconsContainer"></div>
 </div>
 
-<div class="taskbar">
+<div class="taskbar" style="display: none;" id="taskbar">
     <div class="start-button" id="startButton">🪟 Start</div>
     <div class="taskbar-windows-container" id="taskbarWindowsContainer"></div>
     <div class="taskbar-time" id="clock"></div>
@@ -384,7 +453,7 @@
 
 <div class="modal" id="themeModal"><div class="modal-content"><div class="modal-title-bar">Theme Colors<span style="cursor:pointer" id="closeThemeModal">✗</span></div><div class="modal-body"><select id="themeSelect"><option value="teal">Windows 95 Teal</option><option value="silver">Classic Silver</option></select><button id="applyThemeBtn" class="retro-button">Apply</button></div></div></div>
 
-<div class="modal" id="settingsModal"><div class="modal-content"><div class="modal-title-bar">Settings<span style="cursor:pointer" id="closeSettingsModal">✗</span></div><div class="modal-body"><label><input type="checkbox" id="startupSoundToggle"> Play startup sound</label></div></div></div>
+<div class="modal" id="settingsModal"><div class="modal-content"><div class="modal-title-bar">Settings<span style="cursor:pointer" id="closeSettingsModal">✗</span></div><div class="modal-body"><label><input type="checkbox" id="startupSoundToggle" checked> Play startup sound</label></div></div></div>
 
 <div class="modal" id="stickerSelectorModal"><div class="modal-content"><div class="modal-title-bar">Add Decorative Sticker<span style="cursor:pointer" id="closeStickerSelectorModal">✗</span></div><div class="modal-body"><p>Choose a sticker type:</p><button id="stickerEmojiBtn" class="retro-button">😀 Emoji Sticker</button><button id="stickerImageUrlBtn" class="retro-button">🖼️ Image URL Sticker</button><div id="emojiGrid" style="display:none; margin-top:10px; display: flex; flex-wrap: wrap; gap: 10px;"></div><input type="text" id="stickerImageUrl" placeholder="Image URL" style="display:none; margin-top:10px;"><button id="addImageStickerBtn" class="retro-button" style="display:none;">Add Image Sticker</button></div></div></div>
 
@@ -410,6 +479,10 @@
     
     let pendingPasswordCallback = null;
     let pendingPasswordItem = null;
+    
+    // Audio unlocked flag
+    let audioUnlocked = false;
+    let startupSoundPlayed = false;
     
     function saveAll() {
         const allData = { icons, folders, stickers, widgets, recycleBin, currentWallpaper, currentTheme };
@@ -455,6 +528,39 @@
         }
     }
     
+    // Unlock audio (called when boot screen is clicked)
+    function unlockAudio() {
+        if (audioUnlocked) return;
+        
+        // Create silent AudioContext to unlock audio
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const silentBuffer = audioCtx.createBuffer(1, 1, 22050);
+        const source = audioCtx.createBufferSource();
+        source.buffer = silentBuffer;
+        source.connect(audioCtx.destination);
+        source.start();
+        audioCtx.close();
+        
+        audioUnlocked = true;
+        console.log('✅ Audio unlocked by boot screen click');
+        
+        // Play startup sound if enabled
+        playStartupSound();
+    }
+    
+    function playStartupSound() { 
+        if (!audioUnlocked) return;
+        if (startupSoundPlayed) return;
+        if (document.getElementById('startupSoundToggle')?.checked) { 
+            startupSoundPlayed = true;
+            const audio = new Audio('sounds/winxp.mp3'); 
+            audio.volume = 0.3; 
+            audio.play().then(() => {
+                console.log('✅ Startup sound played!');
+            }).catch(e=>console.log('Sound error:', e)); 
+        } 
+    }
+    
     function addTaskbarButton(windowId, title, windowElement) {
         const container = document.getElementById('taskbarWindowsContainer');
         const existingBtn = document.querySelector(`.taskbar-window-btn[data-window-id="${windowId}"]`);
@@ -494,7 +600,6 @@
             noteDiv.className = 'note-item';
             const date = new Date(widget.dateAdded || widget.id).toLocaleString();
             const preview = widget.text ? widget.text.substring(0, 100) : '(empty note)';
-            // Check if widget is visible on desktop
             const widgetDiv = document.querySelector(`.widget[data-widget-id="${widget.id}"]`);
             const isVisible = widgetDiv && widgetDiv.style.display !== 'none';
             noteDiv.innerHTML = `
@@ -517,7 +622,6 @@
             noteDiv.querySelector('.delete-note-btn').onclick = (e) => {
                 e.stopPropagation();
                 if (confirm('Delete this note permanently?')) {
-                    // Delete the widget completely
                     const targetDiv = document.querySelector(`.widget[data-widget-id="${widget.id}"]`);
                     if (targetDiv) targetDiv.remove();
                     widgets = widgets.filter(w => w.id !== widget.id);
@@ -1200,7 +1304,6 @@
     
     function deleteAllNotes() {
         if (confirm('Delete ALL sticky notes permanently? This cannot be undone.')) {
-            // Remove all widget DOM elements
             document.querySelectorAll('.widget').forEach(w => w.remove());
             widgets = [];
             saveAll();
@@ -1369,8 +1472,7 @@
     function sortByName() { icons.sort((a,b) => a.label.localeCompare(b.label)); folders.sort((a,b) => a.name.localeCompare(b.name)); saveAll(); renderAll(); }
     function sortByDate() { icons.sort((a,b) => a.dateAdded - b.dateAdded); folders.sort((a,b) => a.dateAdded - b.dateAdded); saveAll(); renderAll(); }
     function legacyExport() { const data = { icons, folders, stickers, widgets, recycleBin, currentWallpaper, currentTheme }; const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `retro-desktop-backup-${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(url); alert('Backup exported!'); }
-    function playStartupSound() { if (document.getElementById('startupSoundToggle')?.checked) { const audio = new Audio('sounds/winxp.mp3'); audio.volume = 0.3; audio.play().catch(e=>console.log('Sound blocked')); } }
-    function startBootScreen() { const boot = document.createElement('div'); boot.className = 'boot-screen'; boot.innerHTML = '<div>Starting Windows 95...<br><span style="font-size:12px">' + new Date().toDateString() + '</span></div>'; document.body.appendChild(boot); setTimeout(() => boot.remove(), 2500); }
+    function startBootScreen() { /* Boot screen is already showing */ }
     let idleTimer, screensaverActive = false;
     function startScreensaver() { if (screensaverActive) return; screensaverActive = true; document.getElementById('screensaver').classList.add('active'); }
     function stopScreensaver() { document.getElementById('screensaver').classList.remove('active'); screensaverActive = false; resetIdleTimer(); }
@@ -1378,9 +1480,41 @@
     function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
     function updateClock() { document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' }); }
     
-    document.getElementById('startButton').onclick = () => document.getElementById('startMenu').classList.toggle('show');
-    document.addEventListener('click', (e) => { if (!document.getElementById('startButton').contains(e.target) && !document.getElementById('startMenu').contains(e.target)) document.getElementById('startMenu').classList.remove('show'); });
+    // Animated dots on boot screen
+    function startAnimatedDots() {
+        const dotsElement = document.getElementById('bootDots');
+        if (!dotsElement) return;
+        let dotCount = 3;
+        setInterval(() => {
+            dotCount = (dotCount + 1) % 4;
+            dotsElement.textContent = '.'.repeat(dotCount);
+        }, 800);
+    }
     
+    // Boot screen click handler - enters desktop and unlocks audio
+    const bootScreen = document.getElementById('bootScreen');
+    const desktop = document.getElementById('desktop');
+    const taskbar = document.getElementById('taskbar');
+    
+    bootScreen.addEventListener('click', function() {
+        // Unlock audio
+        unlockAudio();
+        // Fade out boot screen
+        bootScreen.style.opacity = '0';
+        bootScreen.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => {
+            bootScreen.style.display = 'none';
+            desktop.style.display = 'block';
+            taskbar.style.display = 'flex';
+            // Initialize everything after boot
+            loadAll();
+            setInterval(updateClock, 1000);
+            resetIdleTimer();
+            // Load any pending start menu items
+        }, 500);
+    });
+    
+    // Event listeners for menu items (will be attached after boot)
     document.getElementById('addIconBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); window.editingIconId = null; updateFolderSelects(); document.getElementById('modalTitle').innerText = 'Add Icon'; document.getElementById('iconLabel').value = ''; document.getElementById('iconLink').value = ''; document.getElementById('iconImageUrl').value = ''; document.getElementById('iconPin').value = ''; document.getElementById('iconHint').value = ''; document.getElementById('iconFolderSelect').value = ''; document.getElementById('iconModal').style.display = 'flex'; };
     
     document.getElementById('saveIconBtn').onclick = () => {
@@ -1439,52 +1573,14 @@
     document.getElementById('closeRecycleWindow').onclick = () => document.getElementById('recycleWindow').style.display = 'none';
     document.getElementById('emptyRecycleBtn').onclick = emptyRecycleBin;
     document.getElementById('screensaver').onclick = stopScreensaver;
-    document.addEventListener('mousemove', resetIdleTimer);
-    document.addEventListener('keydown', resetIdleTimer);
-    document.addEventListener('click', resetIdleTimer);
+    
+    document.getElementById('startButton').onclick = () => document.getElementById('startMenu').classList.toggle('show');
+    document.addEventListener('click', (e) => { if (!document.getElementById('startButton').contains(e.target) && !document.getElementById('startMenu').contains(e.target)) document.getElementById('startMenu').classList.remove('show'); });
     
     makeWindowDraggable(document.getElementById('notesManager'), document.getElementById('notesManagerTitleBar'));
     
-    loadAll();
-    startBootScreen();
-    setTimeout(() => playStartupSound(), 3000);
-    setInterval(updateClock, 1000);
-    resetIdleTimer();
-</script>
-
-<!-- Enable Sound Button - This fixes browser autoplay blocking -->
-<button id="enableSoundBtn" style="position: fixed; bottom: 50px; right: 10px; z-index: 10000; background: #c0c0c0; border: 2px solid #fff; border-right-color: #000; border-bottom-color: #000; padding: 6px 12px; cursor: pointer; font-family: 'MS Sans Serif', Tahoma, sans-serif; font-size: 11px; box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #FFF;">
-  🔈 Enable Sound
-</button>
-
-<script>
-  // This unlocks audio that browsers block by default
-  const enableBtn = document.getElementById('enableSoundBtn');
-  
-  enableBtn.addEventListener('click', function() {
-    // Create a silent audio context to unlock audio on the page
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const silentBuffer = audioCtx.createBuffer(1, 1, 22050);
-    const source = audioCtx.createBufferSource();
-    source.buffer = silentBuffer;
-    source.connect(audioCtx.destination);
-    source.start();
-    audioCtx.close();
-    
-    enableBtn.style.display = 'none';
-    console.log('✅ Audio unlocked');
-    
-    // Test play the startup sound if checkbox is checked
-    if (document.getElementById('startupSoundToggle')?.checked) {
-      const testAudio = new Audio('sounds/winxp.mp3');
-      testAudio.volume = 0.3;
-      testAudio.play().then(() => {
-        console.log('✅ Startup sound played!');
-      }).catch(e => {
-        console.log('❌ Still blocked:', e);
-      });
-    }
-  });
+    // Start animated dots
+    startAnimatedDots();
 </script>
 
 </body>
