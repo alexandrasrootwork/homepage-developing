@@ -64,9 +64,10 @@
         }
         .desktop-window .title-bar {
             background: #000080; color: white; padding: 6px 8px;
-            display: flex; justify-content: space-between; cursor: move;
+            display: flex; justify-content: space-between; cursor: grab;
             flex-shrink: 0;
         }
+        .desktop-window .title-bar:active { cursor: grabbing; }
         .desktop-window .window-content { flex: 1; padding: 0; overflow: auto; background: white; }
         .desktop-window iframe { width: 100%; height: 100%; border: none; }
         .maximize-window, .close-window { cursor: pointer; margin-left: 6px; }
@@ -79,8 +80,9 @@
         }
         .folder-window .title-bar {
             background: #000080; color: white; padding: 6px 8px;
-            display: flex; justify-content: space-between; cursor: move;
+            display: flex; justify-content: space-between; cursor: grab;
         }
+        .folder-window .title-bar:active { cursor: grabbing; }
         .folder-toolbar {
             background: #dcdcdc; padding: 5px 10px; border-bottom: 1px solid #808080;
             display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
@@ -128,7 +130,6 @@
         }
         .start-button:active { border: 2px solid #808080; border-right-color: #fff; border-bottom-color: #fff; }
         
-        /* Taskbar Windows Container - HORIZONTAL SCROLL */
         .taskbar-windows-container {
             flex: 1;
             overflow-x: auto;
@@ -140,18 +141,12 @@
             gap: 4px;
             scrollbar-width: thin;
         }
-        .taskbar-windows-container::-webkit-scrollbar {
-            height: 4px;
-        }
+        .taskbar-windows-container::-webkit-scrollbar { height: 4px; }
         .taskbar-window-btn {
             background: #c0c0c0; border: 1px solid #808080; padding: 2px 8px;
             font-size: 11px; cursor: pointer; max-width: 150px; overflow: hidden;
             text-overflow: ellipsis; white-space: nowrap; display: inline-block;
             flex-shrink: 0;
-        }
-        .taskbar-window-btn.active {
-            background: #000080; color: white;
-            border: 1px solid #ffffff;
         }
         .taskbar-window-btn:hover { background: #a0a0a0; }
         
@@ -281,7 +276,7 @@
     let stickers = [];
     let widgets = [];
     let recycleBin = [];
-    let openWindows = [];
+    let openWindows = []; // Track open windows { id, url, title, windowElement }
     let currentWallpaper = '';
     let currentTheme = 'teal';
     let nextWindowZ = 2100;
@@ -340,26 +335,22 @@
     function addTaskbarButton(windowId, title, windowElement) {
         const container = document.getElementById('taskbarWindowsContainer');
         const existingBtn = document.querySelector(`.taskbar-window-btn[data-window-id="${windowId}"]`);
-        if (existingBtn) return;
+        if (existingBtn) return existingBtn;
         
         const btn = document.createElement('div');
         btn.className = 'taskbar-window-btn';
         btn.setAttribute('data-window-id', windowId);
         btn.innerText = title.length > 20 ? title.substring(0, 18) + '...' : title;
-        btn.onclick = () => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
             // Bring window to front
             windowElement.style.zIndex = nextWindowZ++;
             windowElement.style.display = 'flex';
-            // Highlight active button
-            document.querySelectorAll('.taskbar-window-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            setTimeout(() => btn.classList.remove('active'), 200);
+            // Scroll to show the window
+            windowElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         };
         container.appendChild(btn);
-        
-        // Auto-scroll to show new button
         container.scrollLeft = container.scrollWidth;
-        
         return btn;
     }
     
@@ -368,8 +359,16 @@
         if (btn) btn.remove();
     }
     
-    function updateTaskbarWindows() {
-        // This is handled by add/remove functions now
+    function isWindowOpen(url, title) {
+        return openWindows.find(w => w.url === url && w.title === title);
+    }
+    
+    function bringWindowToFront(windowId) {
+        const windowData = openWindows.find(w => w.id === windowId);
+        if (windowData && windowData.windowElement) {
+            windowData.windowElement.style.zIndex = nextWindowZ++;
+            windowData.windowElement.style.display = 'flex';
+        }
     }
     
     // ========== PASSWORD FUNCTIONS ==========
@@ -561,12 +560,26 @@
         if (icon.pin) {
             showPasswordModal(icon, (success) => {
                 if (success) {
-                    if (icon.link) openInDesktopWindow(icon.link, icon.label);
+                    openOrFocusWindow(icon.link, icon.label);
                 }
             });
         } else {
-            if (icon.link) openInDesktopWindow(icon.link, icon.label);
+            if (icon.link) openOrFocusWindow(icon.link, icon.label);
         }
+    }
+    
+    // Open window or bring existing one to front
+    function openOrFocusWindow(url, title) {
+        // Check if window already open
+        const existing = openWindows.find(w => w.url === url && w.title === title);
+        if (existing && existing.windowElement) {
+            // Bring to front
+            existing.windowElement.style.zIndex = nextWindowZ++;
+            existing.windowElement.style.display = 'flex';
+            return;
+        }
+        // Open new window
+        openInDesktopWindow(url, title);
     }
     
     function editIconWithPassword(icon) {
@@ -679,27 +692,8 @@
                         <div class="folder-content" style="padding:15px; background:#fff; flex:1; display:flex; flex-wrap:wrap; gap:15px; align-content:flex-start; overflow-y:auto;"></div>`;
         document.body.appendChild(win);
         
-        const titleBar = win.querySelector('.title-bar');
-        let pos1=0,pos2=0,pos3=0,pos4=0;
-        titleBar.onmousedown = dragMouseDown;
-        function dragMouseDown(e) {
-            if (e.target.classList.contains('close-folder') || e.target.classList.contains('maximize-folder')) return;
-            e.preventDefault();
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            document.onmouseup = closeDrag;
-            document.onmousemove = elementDrag;
-        }
-        function elementDrag(e) {
-            e.preventDefault();
-            pos1 = pos3 - e.clientX;
-            pos2 = pos4 - e.clientY;
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            win.style.top = (win.offsetTop - pos2) + "px";
-            win.style.left = (win.offsetLeft - pos1) + "px";
-        }
-        function closeDrag() { document.onmouseup = null; document.onmousemove = null; }
+        // Fixed drag for folder window
+        makeWindowDraggable(win, win.querySelector('.title-bar'));
         
         win.querySelector('.close-folder').onclick = () => win.remove();
         win.querySelector('.maximize-folder').onclick = () => {
@@ -717,6 +711,50 @@
         const content = win.querySelector('.folder-content');
         renderFolderContents(id, content);
         win.style.display = 'flex';
+    }
+    
+    // Fixed drag function that doesn't jump
+    function makeWindowDraggable(element, dragHandle) {
+        let offsetX = 0, offsetY = 0, mouseX = 0, mouseY = 0;
+        let isDragging = false;
+        
+        dragHandle.onmousedown = startDrag;
+        
+        function startDrag(e) {
+            if (e.target.classList.contains('close-folder') || 
+                e.target.classList.contains('maximize-folder') ||
+                e.target.classList.contains('close-window') ||
+                e.target.classList.contains('maximize-window')) return;
+            e.preventDefault();
+            isDragging = true;
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            offsetX = element.offsetLeft;
+            offsetY = element.offsetTop;
+            document.onmouseup = stopDrag;
+            document.onmousemove = drag;
+            element.style.cursor = 'grabbing';
+        }
+        
+        function drag(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            let dx = e.clientX - mouseX;
+            let dy = e.clientY - mouseY;
+            let newLeft = offsetX + dx;
+            let newTop = offsetY + dy;
+            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 100));
+            newTop = Math.max(0, Math.min(newTop, window.innerHeight - 50));
+            element.style.left = newLeft + 'px';
+            element.style.top = newTop + 'px';
+        }
+        
+        function stopDrag() {
+            isDragging = false;
+            document.onmouseup = null;
+            document.onmousemove = null;
+            element.style.cursor = '';
+        }
     }
     
     function moveIconToFolder(iconId, folderId) {
@@ -908,35 +946,47 @@
     }
     
     function makeDraggable(element, id, type) {
-        let pos1=0,pos2=0,pos3=0,pos4=0;
-        element.onmousedown = dragMouseDown;
-        function dragMouseDown(e) {
-            if (e.target.classList?.contains('icon-action-btn') || e.target.classList?.contains('delete-sticker') || e.target.classList?.contains('close-widget')) return;
+        let offsetX = 0, offsetY = 0, mouseX = 0, mouseY = 0;
+        let isDragging = false;
+        
+        element.onmousedown = startDrag;
+        
+        function startDrag(e) {
+            if (e.target.classList?.contains('icon-action-btn') || 
+                e.target.classList?.contains('delete-sticker') || 
+                e.target.classList?.contains('close-widget')) return;
             e.preventDefault();
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            document.onmouseup = closeDragElement;
-            document.onmousemove = elementDrag;
+            isDragging = true;
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            offsetX = element.offsetLeft;
+            offsetY = element.offsetTop;
+            document.onmouseup = stopDrag;
+            document.onmousemove = drag;
             element.style.zIndex = '1000';
+            element.style.cursor = 'grabbing';
         }
-        function elementDrag(e) {
+        
+        function drag(e) {
+            if (!isDragging) return;
             e.preventDefault();
-            pos1 = pos3 - e.clientX;
-            pos2 = pos4 - e.clientY;
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            let newTop = element.offsetTop - pos2;
-            let newLeft = element.offsetLeft - pos1;
-            newTop = Math.max(0, Math.min(newTop, window.innerHeight - 100));
+            let dx = e.clientX - mouseX;
+            let dy = e.clientY - mouseY;
+            let newLeft = offsetX + dx;
+            let newTop = offsetY + dy;
             newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 100));
-            element.style.top = newTop + "px";
+            newTop = Math.max(0, Math.min(newTop, window.innerHeight - 100));
             element.style.left = newLeft + "px";
+            element.style.top = newTop + "px";
             updatePosition(type, id, newLeft, newTop);
         }
-        function closeDragElement() {
+        
+        function stopDrag() {
+            isDragging = false;
             document.onmouseup = null;
             document.onmousemove = null;
             element.style.zIndex = '';
+            element.style.cursor = '';
             saveAll();
         }
     }
@@ -966,32 +1016,16 @@
         // Add to taskbar
         const taskbarBtn = addTaskbarButton(windowId, title || 'Window', win);
         
-        const titleBar = win.querySelector('.title-bar');
-        let pos1=0,pos2=0,pos3=0,pos4=0;
-        titleBar.onmousedown = dragMouseDown;
-        function dragMouseDown(e) {
-            if (e.target.classList.contains('close-window') || e.target.classList.contains('maximize-window')) return;
-            e.preventDefault();
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            document.onmouseup = closeDragElement;
-            document.onmousemove = elementDrag;
-            win.style.zIndex = nextWindowZ++;
-        }
-        function elementDrag(e) {
-            e.preventDefault();
-            pos1 = pos3 - e.clientX;
-            pos2 = pos4 - e.clientY;
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            win.style.top = (win.offsetTop - pos2) + "px";
-            win.style.left = (win.offsetLeft - pos1) + "px";
-        }
-        function closeDragElement() { document.onmouseup = null; document.onmousemove = null; }
+        // Store window reference
+        openWindows.push({ id: windowId, url: url, title: title, windowElement: win, taskbarBtn: taskbarBtn });
+        
+        // Make window draggable with fixed function
+        makeWindowDraggable(win, win.querySelector('.title-bar'));
         
         win.querySelector('.close-window').onclick = () => { 
             win.remove(); 
             removeTaskbarButton(windowId);
+            openWindows = openWindows.filter(w => w.id !== windowId);
         };
         win.querySelector('.maximize-window').onclick = () => {
             if (win.style.width === '100%') {
@@ -1003,8 +1037,6 @@
             }
         };
         win.onclick = () => { win.style.zIndex = nextWindowZ++; };
-        
-        openWindows.push({ id: windowId, btn: taskbarBtn, win: win });
     }
     
     function deleteIcon(id) {
