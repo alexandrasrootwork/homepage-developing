@@ -68,9 +68,7 @@
             z-index: 60;
             display: none;
         }
-        .sticker.selected .resize-handle {
-            display: block;
-        }
+        .sticker.selected .resize-handle { display: block; }
         .resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
         .resize-handle.n { top: -5px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
         .resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
@@ -80,20 +78,93 @@
         .resize-handle.s { bottom: -5px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
         .resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
         
-        .sticker img, .sticker .sticker-emoji {
-            pointer-events: none;
-            display: block;
-        }
+        .sticker img, .sticker .sticker-emoji { pointer-events: none; display: block; }
         
+        /* Widget (Sticky Note) - FIXED */
         .widget {
-            position: absolute; background: #c0c0c0; border: 2px solid #fff;
-            border-right-color: #000; border-bottom-color: #000; min-width: 200px;
-            z-index: 100; box-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+            position: absolute;
+            background: #ffffcc;
+            border: 2px solid #000;
+            min-width: 200px;
+            min-height: 150px;
+            z-index: 100;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+            resize: both;
+            overflow: auto;
         }
-        .widget-title-bar { background: #000080; color: white; padding: 4px 8px; display: flex; justify-content: space-between; cursor: move; font-size: 11px; }
-        .widget-content { padding: 8px; background: #dcdcdc; }
-        .widget-content textarea { width: 100%; height: 100px; font-family: inherit; border: 1px solid #808080; background: white; padding: 4px; resize: vertical; }
+        .widget-title-bar {
+            background: #000080;
+            color: white;
+            padding: 4px 8px;
+            display: flex;
+            justify-content: space-between;
+            cursor: move;
+            font-size: 11px;
+        }
+        .widget-content {
+            padding: 8px;
+            background: #ffffcc;
+            height: calc(100% - 28px);
+        }
+        .widget-content textarea {
+            width: 100%;
+            height: 100%;
+            min-height: 100px;
+            font-family: inherit;
+            border: none;
+            background: #ffffcc;
+            resize: none;
+            outline: none;
+            font-size: 12px;
+        }
         .close-widget { cursor: pointer; }
+        
+        /* Notes Manager Window */
+        .notes-manager {
+            position: fixed;
+            background: #c0c0c0;
+            border: 2px solid #fff;
+            border-right-color: #000;
+            border-bottom-color: #000;
+            width: 500px;
+            height: 400px;
+            z-index: 2100;
+            display: none;
+            flex-direction: column;
+        }
+        .notes-manager .title-bar {
+            background: #000080;
+            color: white;
+            padding: 6px 8px;
+            display: flex;
+            justify-content: space-between;
+            cursor: move;
+        }
+        .notes-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            background: #fff;
+        }
+        .note-item {
+            background: #ffffcc;
+            border: 1px solid #c0c0c0;
+            margin-bottom: 10px;
+            padding: 10px;
+            cursor: pointer;
+        }
+        .note-item:hover { background: #ffff99; }
+        .note-date { font-size: 10px; color: #666; margin-bottom: 5px; }
+        .note-preview { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .delete-note-btn {
+            float: right;
+            background: #c0c0c0;
+            border: 1px solid #000;
+            padding: 2px 6px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .delete-note-btn:hover { background: #ff0000; color: white; }
         
         .desktop-window {
             position: fixed; background: #c0c0c0; border: 2px solid #fff;
@@ -251,7 +322,8 @@
             .desktop-window, .folder-window { top: 10px !important; left: 10px !important; right: 10px !important; bottom: 50px !important; width: auto !important; height: auto !important; min-width: unset; }
             .move-icon-btn { left: auto; right: 30px; }
             .taskbar-window-btn { max-width: 100px; font-size: 10px; }
-            .resize-handle { width: 15px; height: 15px; } /* Larger handles for touch */
+            .resize-handle { width: 15px; height: 15px; }
+            .notes-manager { width: 95%; height: 80%; left: 2.5% !important; top: 10% !important; }
         }
     </style>
 </head>
@@ -271,6 +343,7 @@
     <div class="start-menu-item" id="addIconBtn">📌 Add Icon</div>
     <div class="start-menu-item" id="addFolderBtn">📁 Add Folder</div>
     <div class="start-menu-item" id="addWidgetBtn">📋 Add Sticky Note</div>
+    <div class="start-menu-item" id="viewAllNotesBtn">📚 View All Notes</div>
     <div class="start-menu-item" id="addStickerBtn">✨ Add Decorative Sticker</div>
     <div class="start-menu-divider"></div>
     <div class="start-menu-item" id="changeWallpaperBtn">🖼️ Change Wallpaper</div>
@@ -283,6 +356,18 @@
     <div class="start-menu-item" id="legacyBtn">💾 Legacy Export</div>
     <div class="start-menu-divider"></div>
     <div class="start-menu-item" id="settingsBtn">⚙️ Settings</div>
+</div>
+
+<!-- Notes Manager Window -->
+<div class="notes-manager" id="notesManager">
+    <div class="title-bar" id="notesManagerTitleBar">
+        <span>📚 All Sticky Notes</span>
+        <span style="cursor:pointer" id="closeNotesManager">✗</span>
+    </div>
+    <div class="notes-list" id="notesList"></div>
+    <div style="padding:8px; background:#c0c0c0;">
+        <button id="deleteAllNotesBtn" class="retro-button">Delete All Notes</button>
+    </div>
 </div>
 
 <!-- Modals -->
@@ -325,7 +410,6 @@
     let selectedStickerId = null;
     let hideHandlesTimeout = null;
     
-    // Password callback variables
     let pendingPasswordCallback = null;
     let pendingPasswordItem = null;
     
@@ -398,13 +482,58 @@
         if (btn) btn.remove();
     }
     
-    function isWindowOpen(url, title) {
-        return openWindows.find(w => w.url === url && w.title === title);
+    // ========== NOTES MANAGER ==========
+    function refreshNotesManager() {
+        const notesList = document.getElementById('notesList');
+        if (!notesList) return;
+        
+        if (widgets.length === 0) {
+            notesList.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">📝 No sticky notes yet. Click "Add Sticky Note" to create one.</div>';
+            return;
+        }
+        
+        notesList.innerHTML = '';
+        widgets.slice().reverse().forEach(widget => {
+            const noteDiv = document.createElement('div');
+            noteDiv.className = 'note-item';
+            const date = new Date(widget.dateAdded || widget.id).toLocaleString();
+            const preview = widget.text ? widget.text.substring(0, 100) : '(empty note)';
+            noteDiv.innerHTML = `
+                <div class="delete-note-btn" data-id="${widget.id}">✗</div>
+                <div class="note-date">📅 ${date}</div>
+                <div class="note-preview">${escapeHtml(preview)}${widget.text && widget.text.length > 100 ? '...' : ''}</div>
+            `;
+            noteDiv.onclick = (e) => {
+                if (e.target.classList.contains('delete-note-btn')) return;
+                // Find and bring the widget to front
+                const widgetDiv = document.querySelector(`.widget[data-widget-id="${widget.id}"]`);
+                if (widgetDiv) {
+                    widgetDiv.style.zIndex = nextWindowZ++;
+                    widgetDiv.style.display = 'block';
+                }
+            };
+            noteDiv.querySelector('.delete-note-btn').onclick = (e) => {
+                e.stopPropagation();
+                if (confirm('Delete this note?')) {
+                    widgets = widgets.filter(w => w.id !== widget.id);
+                    saveAll();
+                    renderWidgets();
+                    refreshNotesManager();
+                }
+            };
+            notesList.appendChild(noteDiv);
+        });
+    }
+    
+    function showNotesManager() {
+        const manager = document.getElementById('notesManager');
+        refreshNotesManager();
+        manager.style.display = 'flex';
+        manager.style.zIndex = nextWindowZ++;
     }
     
     // ========== STICKER RESIZING ==========
     function selectSticker(stickerId) {
-        // Remove selection from all stickers
         document.querySelectorAll('.sticker').forEach(s => s.classList.remove('selected'));
         if (hideHandlesTimeout) clearTimeout(hideHandlesTimeout);
         
@@ -412,8 +541,6 @@
         if (stickerDiv) {
             stickerDiv.classList.add('selected');
             selectedStickerId = stickerId;
-            
-            // Auto-hide handles after 3 seconds of no interaction
             hideHandlesTimeout = setTimeout(() => {
                 if (selectedStickerId) {
                     const s = document.querySelector(`.sticker[data-id="${selectedStickerId}"]`);
@@ -425,7 +552,6 @@
     }
     
     function makeStickerResizable(stickerDiv, stickerId) {
-        // Add resize handles
         const handles = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se'];
         handles.forEach(dir => {
             const handle = document.createElement('div');
@@ -449,8 +575,8 @@
         e.preventDefault();
         e.stopPropagation();
         
-        const startX = e.clientX;
-        const startY = e.clientY;
+        const startX = e.clientX ?? e.touches[0].clientX;
+        const startY = e.clientY ?? e.touches[0].clientY;
         const startWidth = stickerDiv.offsetWidth;
         const startHeight = stickerDiv.offsetHeight;
         const startLeft = stickerDiv.offsetLeft;
@@ -460,8 +586,10 @@
         if (!sticker) return;
         
         function doResize(moveEvent) {
-            const dx = moveEvent.clientX - startX;
-            const dy = moveEvent.clientY - startY;
+            const clientX = moveEvent.clientX ?? moveEvent.touches[0].clientX;
+            const clientY = moveEvent.clientY ?? moveEvent.touches[0].clientY;
+            const dx = clientX - startX;
+            const dy = clientY - startY;
             let newWidth = startWidth;
             let newHeight = startHeight;
             let newLeft = startLeft;
@@ -483,28 +611,25 @@
             stickerDiv.style.left = newLeft + 'px';
             stickerDiv.style.top = newTop + 'px';
             
-            // Update the font size or image size proportionally
             const contentDiv = stickerDiv.querySelector('.sticker-content');
             if (contentDiv) {
                 const baseSize = Math.min(newWidth, newHeight) * 0.8;
                 if (sticker.isImage) {
                     const img = contentDiv.querySelector('img');
                     if (img) {
-                        img.style.width = baseSize + 'px';
-                        img.style.height = baseSize + 'px';
+                        img.style.maxWidth = '100%';
+                        img.style.maxHeight = '100%';
                     }
                 } else {
                     contentDiv.style.fontSize = baseSize + 'px';
                 }
             }
             
-            // Update stored sticker data
             sticker.width = newWidth;
             sticker.height = newHeight;
             sticker.x = newLeft;
             sticker.y = newTop;
             sticker.fontSize = Math.min(newWidth, newHeight) * 0.8;
-            
             saveAll();
         }
         
@@ -559,16 +684,13 @@
     }
     
     function cancelPassword() {
-        if (pendingPasswordCallback) {
-            pendingPasswordCallback(false);
-        }
+        if (pendingPasswordCallback) pendingPasswordCallback(false);
         document.getElementById('passwordModal').style.display = 'none';
         document.getElementById('passwordInput').value = '';
         pendingPasswordCallback = null;
         pendingPasswordItem = null;
     }
     
-    // Remove password with verification
     let pendingRemoveId = null;
     let pendingRemoveType = null;
     
@@ -697,9 +819,7 @@
         
         if (folder.pin) {
             showPasswordModal(folder, (success) => {
-                if (success) {
-                    openFolder(folderId);
-                }
+                if (success) openFolder(folderId);
             });
         } else {
             openFolder(folderId);
@@ -709,9 +829,7 @@
     function openIconWithPassword(icon) {
         if (icon.pin) {
             showPasswordModal(icon, (success) => {
-                if (success) {
-                    openOrFocusWindow(icon.link, icon.label);
-                }
+                if (success) openOrFocusWindow(icon.link, icon.label);
             });
         } else {
             if (icon.link) openOrFocusWindow(icon.link, icon.label);
@@ -731,9 +849,7 @@
     function editIconWithPassword(icon) {
         if (icon.pin) {
             showPasswordModal(icon, (success) => {
-                if (success) {
-                    openEditIconModal(icon.id);
-                }
+                if (success) openEditIconModal(icon.id);
             });
         } else {
             openEditIconModal(icon.id);
@@ -743,9 +859,7 @@
     function editFolderWithPassword(folder) {
         if (folder.pin) {
             showPasswordModal(folder, (success) => {
-                if (success) {
-                    openEditFolderModal(folder.id);
-                }
+                if (success) openEditFolderModal(folder.id);
             });
         } else {
             openEditFolderModal(folder.id);
@@ -1067,7 +1181,6 @@
             stickerDiv.style.left = (sticker.x || 100) + 'px';
             stickerDiv.style.top = (sticker.y || 100) + 'px';
             
-            // Set initial dimensions
             const width = sticker.width || 60;
             const height = sticker.height || 60;
             stickerDiv.style.width = width + 'px';
@@ -1091,14 +1204,12 @@
             makeStickerDraggable(stickerDiv, sticker.id);
             makeStickerResizable(stickerDiv, sticker.id);
             
-            // Click to select sticker
             stickerDiv.addEventListener('click', (e) => {
                 if (e.target.classList.contains('delete-sticker')) return;
                 e.stopPropagation();
                 selectSticker(sticker.id);
             });
             
-            // Delete sticker
             stickerDiv.querySelector('.delete-sticker')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 stickers = stickers.filter(s => s.id !== sticker.id);
@@ -1108,7 +1219,6 @@
             });
         });
         
-        // Click outside to deselect
         document.querySelector('.desktop').addEventListener('click', (e) => {
             if (!e.target.closest('.sticker')) {
                 document.querySelectorAll('.sticker').forEach(s => s.classList.remove('selected'));
@@ -1179,22 +1289,125 @@
     function renderWidgets() {
         const existing = document.querySelectorAll('.widget');
         existing.forEach(w => w.remove());
+        
         widgets.forEach(widget => {
             const div = document.createElement('div');
             div.className = 'widget';
-            div.style.left = widget.x + 'px';
-            div.style.top = widget.y + 'px';
+            div.setAttribute('data-widget-id', widget.id);
+            div.style.left = (widget.x || 100) + 'px';
+            div.style.top = (widget.y || 100) + 'px';
+            div.style.width = (widget.width || 220) + 'px';
+            div.style.height = (widget.height || 160) + 'px';
             div.innerHTML = `<div class="widget-title-bar"><span>📝 Sticky Note</span><span class="close-widget" data-id="${widget.id}">✗</span></div>
-                            <div class="widget-content"><textarea data-id="${widget.id}" placeholder="Write your note here...">${escapeHtml(widget.text)}</textarea></div>`;
+                            <div class="widget-content"><textarea class="note-textarea" data-id="${widget.id}" placeholder="Write your note here...">${escapeHtml(widget.text || '')}</textarea></div>`;
             document.querySelector('.desktop').appendChild(div);
-            makeDraggable(div, widget.id, 'widget');
+            
+            makeWindowDraggable(div, div.querySelector('.widget-title-bar'));
+            
             div.querySelector('.close-widget').addEventListener('click', () => {
                 widgets = widgets.filter(w => w.id !== widget.id);
                 saveAll();
                 renderWidgets();
+                if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
             });
+            
             const textarea = div.querySelector('textarea');
-            textarea.addEventListener('input', (e) => { widget.text = e.target.value; saveAll(); });
+            textarea.addEventListener('input', (e) => { 
+                widget.text = e.target.value;
+                saveAll();
+                if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
+            });
+            
+            // Make resizable
+            const resizeObserver = new ResizeObserver(() => {
+                widget.width = div.offsetWidth;
+                widget.height = div.offsetHeight;
+                saveAll();
+            });
+            resizeObserver.observe(div);
+        });
+    }
+    
+    function addWidget() {
+        const newId = Date.now();
+        widgets.push({ 
+            id: newId, 
+            text: '', 
+            x: 100 + (widgets.length * 20), 
+            y: 100 + (widgets.length * 20), 
+            width: 220, 
+            height: 160,
+            dateAdded: newId
+        });
+        saveAll();
+        renderWidgets();
+    }
+    
+    function deleteAllNotes() {
+        if (confirm('Delete ALL sticky notes? This cannot be undone.')) {
+            widgets = [];
+            saveAll();
+            renderWidgets();
+            refreshNotesManager();
+            if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
+        }
+    }
+    
+    function renderStickers() {
+        const existing = document.querySelectorAll('.sticker');
+        existing.forEach(s => s.remove());
+        
+        stickers.forEach(sticker => {
+            const stickerDiv = document.createElement('div');
+            stickerDiv.className = 'sticker';
+            stickerDiv.setAttribute('data-id', sticker.id);
+            stickerDiv.style.left = (sticker.x || 100) + 'px';
+            stickerDiv.style.top = (sticker.y || 100) + 'px';
+            
+            const width = sticker.width || 60;
+            const height = sticker.height || 60;
+            stickerDiv.style.width = width + 'px';
+            stickerDiv.style.height = height + 'px';
+            
+            const fontSize = sticker.fontSize || 48;
+            
+            if (sticker.isImage) {
+                stickerDiv.innerHTML = `<div class="delete-sticker" data-id="${sticker.id}">✗</div>
+                                       <div class="sticker-content" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
+                                           <img src="${escapeHtml(sticker.emoji)}" style="max-width:100%; max-height:100%; width:auto; height:auto;">
+                                       </div>`;
+            } else {
+                stickerDiv.innerHTML = `<div class="delete-sticker" data-id="${sticker.id}">✗</div>
+                                       <div class="sticker-content sticker-emoji" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:${fontSize}px; line-height:1;">
+                                           ${sticker.emoji}
+                                       </div>`;
+            }
+            
+            document.querySelector('.desktop').appendChild(stickerDiv);
+            makeStickerDraggable(stickerDiv, sticker.id);
+            makeStickerResizable(stickerDiv, sticker.id);
+            
+            stickerDiv.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-sticker')) return;
+                e.stopPropagation();
+                selectSticker(sticker.id);
+            });
+            
+            stickerDiv.querySelector('.delete-sticker')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                stickers = stickers.filter(s => s.id !== sticker.id);
+                if (selectedStickerId === sticker.id) selectedStickerId = null;
+                saveAll();
+                renderStickers();
+            });
+        });
+        
+        document.querySelector('.desktop').addEventListener('click', (e) => {
+            if (!e.target.closest('.sticker')) {
+                document.querySelectorAll('.sticker').forEach(s => s.classList.remove('selected'));
+                if (hideHandlesTimeout) clearTimeout(hideHandlesTimeout);
+                selectedStickerId = null;
+            }
         });
     }
     
@@ -1331,11 +1544,6 @@
         document.getElementById('folderModal').style.display = 'none';
     }
     
-    function addWidget() {
-        widgets.push({ id: Date.now(), text: '', x: 100, y: 100 });
-        saveAll(); renderAll();
-    }
-    
     function showStickerSelector() {
         document.getElementById('stickerSelectorModal').style.display = 'flex';
         const emojiGrid = document.getElementById('emojiGrid');
@@ -1426,6 +1634,12 @@
     document.getElementById('saveFolderBtn').onclick = saveFolder;
     document.getElementById('closeFolderModal').onclick = () => document.getElementById('folderModal').style.display = 'none';
     
+    document.getElementById('addWidgetBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); addWidget(); };
+    
+    document.getElementById('viewAllNotesBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); showNotesManager(); };
+    document.getElementById('closeNotesManager').onclick = () => document.getElementById('notesManager').style.display = 'none';
+    document.getElementById('deleteAllNotesBtn').onclick = () => deleteAllNotes();
+    
     document.getElementById('confirmMoveBtn').onclick = () => {
         const folderId = document.getElementById('moveFolderSelect').value;
         if (contextItemId) moveIconToFolder(contextItemId, folderId);
@@ -1441,7 +1655,6 @@
     document.getElementById('cancelRemovePasswordBtn').onclick = cancelRemovePassword;
     document.getElementById('closeRemovePasswordModal').onclick = cancelRemovePassword;
     
-    document.getElementById('addWidgetBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); addWidget(); };
     document.getElementById('addStickerBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); showStickerSelector(); };
     document.getElementById('stickerEmojiBtn').onclick = () => { document.getElementById('emojiGrid').style.display = 'flex'; document.getElementById('stickerImageUrl').style.display = 'none'; document.getElementById('addImageStickerBtn').style.display = 'none'; };
     document.getElementById('stickerImageUrlBtn').onclick = () => { document.getElementById('emojiGrid').style.display = 'none'; document.getElementById('stickerImageUrl').style.display = 'block'; document.getElementById('addImageStickerBtn').style.display = 'block'; };
@@ -1468,6 +1681,9 @@
     document.addEventListener('mousemove', resetIdleTimer);
     document.addEventListener('keydown', resetIdleTimer);
     document.addEventListener('click', resetIdleTimer);
+    
+    // Make Notes Manager draggable
+    makeWindowDraggable(document.getElementById('notesManager'), document.getElementById('notesManagerTitleBar'));
     
     // Initialize
     loadAll();
