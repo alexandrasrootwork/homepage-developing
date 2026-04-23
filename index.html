@@ -74,17 +74,26 @@
         .folder-window {
             position: fixed; background: #c0c0c0; border: 2px solid #fff;
             border-right-color: #000; border-bottom-color: #000;
-            min-width: 400px; min-height: 300px; z-index: 1100; display: none;
+            min-width: 450px; min-height: 350px; z-index: 1100; display: none;
             flex-direction: column;
         }
         .folder-window .title-bar {
             background: #000080; color: white; padding: 6px 8px;
             display: flex; justify-content: space-between; cursor: move;
         }
+        .folder-toolbar {
+            background: #dcdcdc; padding: 5px 10px; border-bottom: 1px solid #808080;
+            display: flex; gap: 10px; align-items: center;
+        }
+        .folder-toolbar button {
+            background: #c0c0c0; border: 1px solid #808080; padding: 3px 8px;
+            cursor: pointer; font-family: inherit; font-size: 11px;
+        }
+        .folder-toolbar button:active { background: #a0a0a0; }
         .folder-window .folder-content {
             padding: 15px; background: #fff; flex: 1;
             display: flex; flex-wrap: wrap; gap: 15px; align-content: flex-start;
-            min-height: 200px; overflow-y: auto;
+            min-height: 250px; overflow-y: auto;
         }
         .folder-item {
             width: 80px; text-align: center; cursor: pointer; padding: 5px;
@@ -99,6 +108,12 @@
             font-size: 10px; cursor: pointer; display: none;
         }
         .folder-item:hover .remove-from-folder { display: block; }
+        .folder-item .move-to-desktop-btn {
+            position: absolute; top: -5px; left: -5px; width: 16px; height: 16px;
+            background: #008000; border: 1px solid #000; border-radius: 10px;
+            font-size: 9px; cursor: pointer; display: none; color: white; line-height: 14px;
+        }
+        .folder-item:hover .move-to-desktop-btn { display: block; }
         
         .taskbar {
             background: #c0c0c0; border-top: 2px solid #ffffff; padding: 4px 8px;
@@ -349,6 +364,28 @@
         });
     }
     
+    function moveIconToDesktop(iconId) {
+        const icon = icons.find(i => i.id === iconId);
+        if (icon) {
+            icon.folderId = null;
+            saveAll();
+            renderAll();
+        }
+    }
+    
+    function moveAllToDesktop(folderId) {
+        const folderIcons = icons.filter(icon => icon.folderId === folderId);
+        folderIcons.forEach(icon => { icon.folderId = null; });
+        saveAll();
+        renderAll();
+        // Refresh open folder window if open
+        const folderWindow = document.getElementById(`folder-${folderId}`);
+        if (folderWindow && folderWindow.style.display === 'block') {
+            const content = folderWindow.querySelector('.folder-content');
+            if (content) renderFolderContents(folderId, content);
+        }
+    }
+    
     function refreshFolderWindow(folderId) {
         const folderWindow = document.getElementById(`folder-${folderId}`);
         if (folderWindow && folderWindow.style.display === 'block') {
@@ -370,10 +407,12 @@
             itemDiv.className = 'folder-item';
             const isEmoji = icon.image && (icon.image.length <= 4 || /[\u{1F300}-\u{1F9FF}]/u.test(icon.image));
             itemDiv.innerHTML = `<div class="remove-from-folder" data-id="${icon.id}">✗</div>
+                                 <div class="move-to-desktop-btn" data-id="${icon.id}">🏠</div>
                                  ${isEmoji ? `<div class="folder-item-img">${icon.image || '📄'}</div>` : `<img src="${icon.image}" class="folder-item-img" style="width:40px; height:40px;">`}
                                  <div class="folder-item-label">${escapeHtml(icon.label)}</div>`;
             itemDiv.onclick = (e) => {
                 if (e.target.classList.contains('remove-from-folder')) return;
+                if (e.target.classList.contains('move-to-desktop-btn')) return;
                 if (icon.pin) {
                     const entered = prompt('Enter PIN to open:');
                     if (entered !== icon.pin) { alert('Wrong PIN!'); return; }
@@ -382,9 +421,12 @@
             };
             itemDiv.querySelector('.remove-from-folder')?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                icon.folderId = null;
-                saveAll();
-                renderAll();
+                deleteIcon(icon.id);
+                refreshFolderWindow(folderId);
+            });
+            itemDiv.querySelector('.move-to-desktop-btn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                moveIconToDesktop(icon.id);
                 refreshFolderWindow(folderId);
             });
             container.appendChild(itemDiv);
@@ -401,10 +443,14 @@
         win.id = `folder-${id}`;
         win.style.left = '150px';
         win.style.top = '80px';
-        win.style.width = '450px';
-        win.style.height = '350px';
+        win.style.width = '500px';
+        win.style.height = '400px';
         win.style.zIndex = nextWindowZ++;
         win.innerHTML = `<div class="title-bar"><span>📁 ${escapeHtml(folder.name)}</span><span><span class="maximize-folder" style="cursor:pointer; margin-right:8px;">□</span><span class="close-folder" style="cursor:pointer;">✗</span></span></div>
+                        <div class="folder-toolbar">
+                            <button class="move-all-to-desktop">🏠 Move All to Desktop</button>
+                            <span style="font-size:10px; color:#555;">Tip: Click 🏠 on any icon to move it back</span>
+                        </div>
                         <div class="folder-content" style="padding:15px; background:#fff; flex:1; display:flex; flex-wrap:wrap; gap:15px; align-content:flex-start; overflow-y:auto;"></div>`;
         document.body.appendChild(win);
         
@@ -433,13 +479,14 @@
         win.querySelector('.close-folder').onclick = () => win.remove();
         win.querySelector('.maximize-folder').onclick = () => {
             if (win.style.width === '100%') {
-                win.style.width = '450px'; win.style.height = '350px';
+                win.style.width = '500px'; win.style.height = '400px';
                 win.style.left = '150px'; win.style.top = '80px';
             } else {
                 win.style.width = '100%'; win.style.height = 'calc(100% - 50px)';
                 win.style.left = '0'; win.style.top = '0';
             }
         };
+        win.querySelector('.move-all-to-desktop').onclick = () => moveAllToDesktop(id);
         win.onclick = () => win.style.zIndex = nextWindowZ++;
         
         const content = win.querySelector('.folder-content');
@@ -486,7 +533,7 @@
             };
             
             let pressTimer;
-            el.ontouchstart = () => { pressTimer = setTimeout(() => { el.classList.add('long-press'); showContextMenu(el.getBoundingClientRect().left, el.getBoundingClientRect().top, id); }, 800); };
+            el.ontouchstart = () => { pressTimer = setTimeout(() => { el.classList.add('long-press'); const rect = el.getBoundingClientRect(); showContextMenu(rect.left, rect.top, id); }, 800); };
             el.ontouchend = () => { clearTimeout(pressTimer); setTimeout(() => el.classList.remove('long-press'), 100); };
             el.ontouchmove = () => { clearTimeout(pressTimer); };
             
