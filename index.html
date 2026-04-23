@@ -37,6 +37,18 @@
         .edit-icon-btn:hover { background: #000080; color: white; }
         .move-icon-btn:hover { background: #00aa00; color: white; }
         
+        /* Locked overlay */
+        .locked-icon::after {
+            content: "🔒";
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            font-size: 14px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            padding: 0 2px;
+        }
+        
         .sticker { position: absolute; cursor: move; z-index: 50; font-size: 48px; transition: transform 0.1s ease; }
         .sticker:hover { transform: scale(1.05); filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.3)); }
         .sticker .delete-sticker {
@@ -83,7 +95,7 @@
         }
         .folder-toolbar {
             background: #dcdcdc; padding: 5px 10px; border-bottom: 1px solid #808080;
-            display: flex; gap: 10px; align-items: center;
+            display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
         }
         .folder-toolbar button {
             background: #c0c0c0; border: 1px solid #808080; padding: 3px 8px;
@@ -114,6 +126,7 @@
             font-size: 9px; cursor: pointer; display: none; color: white; line-height: 14px;
         }
         .folder-item:hover .move-to-desktop-btn { display: block; }
+        .folder-item.locked-folder-item { opacity: 0.7; }
         
         .taskbar {
             background: #c0c0c0; border-top: 2px solid #ffffff; padding: 4px 8px;
@@ -158,6 +171,14 @@
             border-bottom-color: #000; padding: 5px 10px; cursor: pointer; margin-top: 5px;
         }
         .retro-button:active { border: 2px solid #000; border-right-color: #fff; border-bottom-color: #fff; }
+        
+        .password-modal {
+            text-align: center;
+        }
+        .password-modal .hint-text {
+            background: #ffffcc; padding: 8px; margin: 10px 0; font-size: 11px;
+            border: 1px solid #808080;
+        }
         
         .context-menu {
             position: fixed; background: #c0c0c0; border: 2px solid #fff;
@@ -222,7 +243,13 @@
 </div>
 
 <!-- Modals -->
-<div class="modal" id="iconModal"><div class="modal-content" id="modalContent"><div class="modal-title-bar" id="modalTitleBar"><span id="modalTitle">Add Icon</span><span style="cursor:pointer" id="closeModal">✗</span></div><div class="modal-body"><input type="text" id="iconLabel" placeholder="📝 Icon name (e.g., Bucket List)"><input type="text" id="iconLink" placeholder="🔗 Link URL (bucketlist.html or https://google.com)"><input type="text" id="iconImageUrl" placeholder="🖼️ Emoji (📝) or image URL"><input type="password" id="iconPin" placeholder="🔒 PIN to unlock (optional)"><select id="iconFolderSelect"><option value="">-- Desktop (No Folder) --</option></select><button id="saveIconBtn" class="retro-button">Save Icon</button></div></div></div>
+<div class="modal" id="iconModal"><div class="modal-content" id="modalContent"><div class="modal-title-bar" id="modalTitleBar"><span id="modalTitle">Add Icon</span><span style="cursor:pointer" id="closeModal">✗</span></div><div class="modal-body"><input type="text" id="iconLabel" placeholder="📝 Icon name"><input type="text" id="iconLink" placeholder="🔗 Link URL"><input type="text" id="iconImageUrl" placeholder="🖼️ Emoji or image URL"><input type="password" id="iconPin" placeholder="🔒 Password (leave blank for no lock)"><input type="text" id="iconHint" placeholder="💡 Password hint (optional)"><select id="iconFolderSelect"><option value="">-- Desktop (No Folder) --</option></select><button id="saveIconBtn" class="retro-button">Save Icon</button></div></div></div>
+
+<div class="modal" id="folderModal"><div class="modal-content"><div class="modal-title-bar">Add/Edit Folder<span style="cursor:pointer" id="closeFolderModal">✗</span></div><div class="modal-body"><input type="text" id="folderName" placeholder="📁 Folder name"><input type="password" id="folderPin" placeholder="🔒 Password (leave blank for no lock)"><input type="text" id="folderHint" placeholder="💡 Password hint (optional)"><button id="saveFolderBtn" class="retro-button">Save Folder</button></div></div></div>
+
+<div class="modal" id="passwordModal" class="password-modal"><div class="modal-content"><div class="modal-title-bar">🔒 Password Required<span style="cursor:pointer" id="closePasswordModal">✗</span></div><div class="modal-body" id="passwordModalBody"><input type="password" id="passwordInput" placeholder="Enter password"><div id="hintDisplay" class="hint-text" style="display:none;"></div><button id="submitPasswordBtn" class="retro-button">Unlock</button><button id="cancelPasswordBtn" class="retro-button">Cancel</button></div></div></div>
+
+<div class="modal" id="removePasswordModal"><div class="modal-content"><div class="modal-title-bar">Remove Password<span style="cursor:pointer" id="closeRemovePasswordModal">✗</span></div><div class="modal-body"><p>Enter current password to remove password protection:</p><input type="password" id="removePasswordInput" placeholder="Current password"><div id="removeHintDisplay" class="hint-text" style="display:none;"></div><button id="confirmRemovePasswordBtn" class="retro-button">Remove Password</button><button id="cancelRemovePasswordBtn" class="retro-button">Cancel</button></div></div></div>
 
 <div class="modal" id="moveToFolderModal"><div class="modal-content"><div class="modal-title-bar">Move to Folder<span style="cursor:pointer" id="closeMoveModal">✗</span></div><div class="modal-body"><select id="moveFolderSelect"><option value="">-- Desktop (No Folder) --</option></select><button id="confirmMoveBtn" class="retro-button">Move Icon</button></div></div></div>
 
@@ -250,7 +277,11 @@
     let currentWallpaper = '';
     let currentTheme = 'teal';
     let nextWindowZ = 2100;
-    let contextIconId = null;
+    let contextItemId = null;
+    let contextItemType = null;
+    let pendingUnlockCallback = null;
+    let pendingRemovePasswordId = null;
+    let pendingRemovePasswordType = null;
     
     function saveAll() {
         const allData = { icons, folders, stickers, widgets, recycleBin, currentWallpaper, currentTheme };
@@ -271,10 +302,10 @@
         }
         if (icons.length === 0) {
             icons = [
-                { id: Date.now(), label: "Bucket List", link: "bucketlist.html", image: "📝", x: 30, y: 30, dateAdded: Date.now(), pin: "", folderId: null },
-                { id: Date.now()+1, label: "Comfort Corner", link: "comfort.html", image: "🧸", x: 130, y: 30, dateAdded: Date.now()+1, pin: "", folderId: null },
-                { id: Date.now()+2, label: "Recipes", link: "recipes.html", image: "🍳", x: 230, y: 30, dateAdded: Date.now()+2, pin: "", folderId: null },
-                { id: Date.now()+3, label: "Journal", link: "journal.html", image: "📔", x: 330, y: 30, dateAdded: Date.now()+3, pin: "", folderId: null }
+                { id: Date.now(), label: "Bucket List", link: "bucketlist.html", image: "📝", x: 30, y: 30, dateAdded: Date.now(), pin: "", hint: "", folderId: null },
+                { id: Date.now()+1, label: "Comfort Corner", link: "comfort.html", image: "🧸", x: 130, y: 30, dateAdded: Date.now()+1, pin: "", hint: "", folderId: null },
+                { id: Date.now()+2, label: "Recipes", link: "recipes.html", image: "🍳", x: 230, y: 30, dateAdded: Date.now()+2, pin: "", hint: "", folderId: null },
+                { id: Date.now()+3, label: "Journal", link: "journal.html", image: "📔", x: 330, y: 30, dateAdded: Date.now()+3, pin: "", hint: "", folderId: null }
             ];
         }
         applyTheme();
@@ -296,6 +327,90 @@
         }
     }
     
+    // Password verification
+    function verifyPassword(item, type, callback) {
+        if (!item.pin) {
+            callback(true);
+            return;
+        }
+        pendingUnlockCallback = callback;
+        const modal = document.getElementById('passwordModal');
+        const hintDisplay = document.getElementById('hintDisplay');
+        if (item.hint) {
+            hintDisplay.style.display = 'block';
+            hintDisplay.innerHTML = `💡 Hint: ${escapeHtml(item.hint)}`;
+        } else {
+            hintDisplay.style.display = 'none';
+        }
+        modal.style.display = 'flex';
+    }
+    
+    function submitPassword() {
+        const password = document.getElementById('passwordInput').value;
+        const modal = document.getElementById('passwordModal');
+        if (pendingUnlockCallback) {
+            pendingUnlockCallback(password);
+            pendingUnlockCallback = null;
+        }
+        document.getElementById('passwordInput').value = '';
+        modal.style.display = 'none';
+    }
+    
+    function cancelPassword() {
+        if (pendingUnlockCallback) {
+            pendingUnlockCallback(false);
+            pendingUnlockCallback = null;
+        }
+        document.getElementById('passwordInput').value = '';
+        document.getElementById('passwordModal').style.display = 'none';
+    }
+    
+    // Remove password with verification
+    function showRemovePasswordModal(id, type, currentPin, hint) {
+        pendingRemovePasswordId = id;
+        pendingRemovePasswordType = type;
+        const modal = document.getElementById('removePasswordModal');
+        const hintDisplay = document.getElementById('removeHintDisplay');
+        if (hint) {
+            hintDisplay.style.display = 'block';
+            hintDisplay.innerHTML = `💡 Hint: ${escapeHtml(hint)}`;
+        } else {
+            hintDisplay.style.display = 'none';
+        }
+        modal.style.display = 'flex';
+    }
+    
+    function confirmRemovePassword() {
+        const enteredPassword = document.getElementById('removePasswordInput').value;
+        let item = null;
+        if (pendingRemovePasswordType === 'icon') {
+            item = icons.find(i => i.id === pendingRemovePasswordId);
+        } else if (pendingRemovePasswordType === 'folder') {
+            item = folders.find(f => f.id === pendingRemovePasswordId);
+        }
+        
+        if (item && item.pin === enteredPassword) {
+            item.pin = '';
+            item.hint = '';
+            saveAll();
+            renderAll();
+            alert('Password removed successfully!');
+            document.getElementById('removePasswordModal').style.display = 'none';
+            document.getElementById('removePasswordInput').value = '';
+        } else {
+            alert('Incorrect password! Cannot remove password protection.');
+        }
+        pendingRemovePasswordId = null;
+        pendingRemovePasswordType = null;
+    }
+    
+    function cancelRemovePassword() {
+        document.getElementById('removePasswordModal').style.display = 'none';
+        document.getElementById('removePasswordInput').value = '';
+        pendingRemovePasswordId = null;
+        pendingRemovePasswordType = null;
+    }
+    
     function renderAll() {
         updateFolderSelects();
         renderIcons();
@@ -315,6 +430,7 @@
         desktopIcons.forEach(icon => {
             const div = document.createElement('div');
             div.className = 'desktop-icon';
+            if (icon.pin) div.classList.add('locked-icon');
             div.setAttribute('data-id', icon.id);
             const isEmoji = icon.image && (icon.image.length <= 4 || /[\u{1F300}-\u{1F9FF}]/u.test(icon.image));
             div.innerHTML = `<div class="icon-action-btn edit-icon-btn" data-id="${icon.id}">✏️</div>
@@ -342,9 +458,11 @@
         folders.forEach(folder => {
             const div = document.createElement('div');
             div.className = 'folder-icon';
+            if (folder.pin) div.classList.add('locked-icon');
             div.setAttribute('data-id', folder.id);
             div.innerHTML = `<div class="icon-action-btn edit-icon-btn" data-id="${folder.id}">✏️</div>
                              <div class="icon-action-btn delete-icon-btn" data-id="${folder.id}">✗</div>
+                             ${folder.pin ? `<div class="icon-action-btn lock-icon-btn" data-id="${folder.id}">🔒</div>` : ''}
                              <div class="icon-img">📁</div>
                              <div class="icon-label">${escapeHtml(folder.name)} (${icons.filter(i => i.folderId === folder.id).length})</div>`;
             if (window.innerWidth > 768) {
@@ -358,10 +476,42 @@
         
         document.querySelectorAll('.folder-icon').forEach(el => {
             const id = parseInt(el.dataset.id);
-            el.ondblclick = () => openFolder(id);
-            el.querySelector('.edit-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editFolderName(id); });
+            el.ondblclick = () => openFolderWithPassword(id);
+            el.querySelector('.edit-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editFolder(id); });
             el.querySelector('.delete-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); deleteFolder(id); });
+            el.querySelector('.lock-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editFolder(id); });
         });
+    }
+    
+    function openFolderWithPassword(folderId) {
+        const folder = folders.find(f => f.id === folderId);
+        if (!folder) return;
+        
+        if (folder.pin) {
+            verifyPassword(folder, 'folder', (isCorrect) => {
+                if (isCorrect === true) {
+                    openFolder(folderId);
+                } else if (isCorrect === false) {
+                    alert('Incorrect password!');
+                }
+            });
+        } else {
+            openFolder(folderId);
+        }
+    }
+    
+    function openIconWithPassword(icon) {
+        if (icon.pin) {
+            verifyPassword(icon, 'icon', (isCorrect) => {
+                if (isCorrect === true) {
+                    if (icon.link) openInDesktopWindow(icon.link, icon.label);
+                } else if (isCorrect === false) {
+                    alert('Incorrect password!');
+                }
+            });
+        } else {
+            if (icon.link) openInDesktopWindow(icon.link, icon.label);
+        }
     }
     
     function moveIconToDesktop(iconId) {
@@ -378,7 +528,6 @@
         folderIcons.forEach(icon => { icon.folderId = null; });
         saveAll();
         renderAll();
-        // Refresh open folder window if open
         const folderWindow = document.getElementById(`folder-${folderId}`);
         if (folderWindow && folderWindow.style.display === 'block') {
             const content = folderWindow.querySelector('.folder-content');
@@ -405,19 +554,17 @@
         folderIcons.forEach(icon => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'folder-item';
+            if (icon.pin) itemDiv.classList.add('locked-folder-item');
             const isEmoji = icon.image && (icon.image.length <= 4 || /[\u{1F300}-\u{1F9FF}]/u.test(icon.image));
             itemDiv.innerHTML = `<div class="remove-from-folder" data-id="${icon.id}">✗</div>
                                  <div class="move-to-desktop-btn" data-id="${icon.id}">🏠</div>
+                                 ${icon.pin ? '<div style="position:absolute; top:-5px; right:15px; font-size:10px;">🔒</div>' : ''}
                                  ${isEmoji ? `<div class="folder-item-img">${icon.image || '📄'}</div>` : `<img src="${icon.image}" class="folder-item-img" style="width:40px; height:40px;">`}
                                  <div class="folder-item-label">${escapeHtml(icon.label)}</div>`;
             itemDiv.onclick = (e) => {
                 if (e.target.classList.contains('remove-from-folder')) return;
                 if (e.target.classList.contains('move-to-desktop-btn')) return;
-                if (icon.pin) {
-                    const entered = prompt('Enter PIN to open:');
-                    if (entered !== icon.pin) { alert('Wrong PIN!'); return; }
-                }
-                if (icon.link) openInDesktopWindow(icon.link, icon.label);
+                openIconWithPassword(icon);
             };
             itemDiv.querySelector('.remove-from-folder')?.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -506,7 +653,7 @@
     }
     
     function openMoveModal(iconId) {
-        contextIconId = iconId;
+        contextItemId = iconId;
         updateFolderSelects();
         document.getElementById('moveFolderSelect').value = '';
         document.getElementById('moveToFolderModal').style.display = 'flex';
@@ -519,50 +666,139 @@
             
             el.onclick = (e) => {
                 if (e.target.classList.contains('icon-action-btn')) return;
-                if (icon && icon.pin) {
-                    const entered = prompt('Enter PIN to open:');
-                    if (entered !== icon.pin) { alert('Wrong PIN!'); return; }
-                }
-                if (icon && icon.link) openInDesktopWindow(icon.link, icon.label);
+                openIconWithPassword(icon);
             };
             
             el.oncontextmenu = (e) => {
                 e.preventDefault();
-                showContextMenu(e.clientX, e.clientY, id);
+                showContextMenu(e.clientX, e.clientY, id, 'icon');
                 return false;
             };
             
             let pressTimer;
-            el.ontouchstart = () => { pressTimer = setTimeout(() => { el.classList.add('long-press'); const rect = el.getBoundingClientRect(); showContextMenu(rect.left, rect.top, id); }, 800); };
+            el.ontouchstart = () => { pressTimer = setTimeout(() => { el.classList.add('long-press'); const rect = el.getBoundingClientRect(); showContextMenu(rect.left, rect.top, id, 'icon'); }, 800); };
             el.ontouchend = () => { clearTimeout(pressTimer); setTimeout(() => el.classList.remove('long-press'), 100); };
             el.ontouchmove = () => { clearTimeout(pressTimer); };
             
-            el.querySelector('.edit-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(id); });
+            el.querySelector('.edit-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editIcon(id); });
             el.querySelector('.delete-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); deleteIcon(id); });
             el.querySelector('.move-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); openMoveModal(id); });
+            el.querySelector('.lock-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editIcon(id); });
         });
     }
     
-    function showContextMenu(x, y, iconId) {
+    function editIcon(id) {
+        const icon = icons.find(i => i.id === id);
+        if (!icon) return;
+        if (icon.pin) {
+            verifyPassword(icon, 'icon', (isCorrect) => {
+                if (isCorrect === true) {
+                    openEditIconModal(id);
+                } else if (isCorrect === false) {
+                    alert('Incorrect password! Cannot edit.');
+                }
+            });
+        } else {
+            openEditIconModal(id);
+        }
+    }
+    
+    function openEditIconModal(id) {
+        const icon = icons.find(i => i.id === id);
+        if (!icon) return;
+        window.editingIconId = id;
+        updateFolderSelects();
+        document.getElementById('modalTitle').innerText = 'Edit Icon';
+        document.getElementById('iconLabel').value = icon.label;
+        document.getElementById('iconLink').value = icon.link || '';
+        document.getElementById('iconImageUrl').value = icon.image || '';
+        document.getElementById('iconPin').value = icon.pin || '';
+        document.getElementById('iconHint').value = icon.hint || '';
+        document.getElementById('iconFolderSelect').value = icon.folderId || '';
+        document.getElementById('iconModal').style.display = 'flex';
+    }
+    
+    function editFolder(id) {
+        const folder = folders.find(f => f.id === id);
+        if (!folder) return;
+        if (folder.pin) {
+            verifyPassword(folder, 'folder', (isCorrect) => {
+                if (isCorrect === true) {
+                    openEditFolderModal(id);
+                } else if (isCorrect === false) {
+                    alert('Incorrect password! Cannot edit.');
+                }
+            });
+        } else {
+            openEditFolderModal(id);
+        }
+    }
+    
+    function openEditFolderModal(id) {
+        const folder = folders.find(f => f.id === id);
+        if (!folder) return;
+        window.editingFolderId = id;
+        document.getElementById('folderName').value = folder.name;
+        document.getElementById('folderPin').value = folder.pin || '';
+        document.getElementById('folderHint').value = folder.hint || '';
+        document.getElementById('folderModal').style.display = 'flex';
+    }
+    
+    function showContextMenu(x, y, id, type) {
+        contextItemId = id;
+        contextItemType = type;
         const menu = document.getElementById('contextMenu');
-        menu.innerHTML = `
-            <div class="context-menu-item" id="cm-open">🔗 Open</div>
-            <div class="context-menu-item" id="cm-edit">✏️ Edit</div>
-            <div class="context-menu-item" id="cm-move">📁 Move to Folder</div>
-            <div class="context-menu-item" id="cm-delete">🗑️ Delete</div>
-        `;
+        if (type === 'icon') {
+            menu.innerHTML = `
+                <div class="context-menu-item" id="cm-open">🔗 Open</div>
+                <div class="context-menu-item" id="cm-edit">✏️ Edit</div>
+                <div class="context-menu-item" id="cm-move">📁 Move to Folder</div>
+                <div class="context-menu-item" id="cm-remove-password">🔓 Remove Password</div>
+                <div class="context-menu-item" id="cm-delete">🗑️ Delete</div>
+            `;
+        } else {
+            menu.innerHTML = `
+                <div class="context-menu-item" id="cm-open">📂 Open</div>
+                <div class="context-menu-item" id="cm-edit">✏️ Edit</div>
+                <div class="context-menu-item" id="cm-remove-password">🔓 Remove Password</div>
+                <div class="context-menu-item" id="cm-delete">🗑️ Delete</div>
+            `;
+        }
         menu.style.left = x + 'px';
         menu.style.top = y + 'px';
         menu.style.display = 'block';
         
         document.getElementById('cm-open').onclick = () => {
-            const icon = icons.find(i => i.id === iconId);
-            if (icon && icon.link) openInDesktopWindow(icon.link, icon.label);
+            if (type === 'icon') {
+                const icon = icons.find(i => i.id === id);
+                if (icon) openIconWithPassword(icon);
+            } else {
+                openFolderWithPassword(id);
+            }
             menu.style.display = 'none';
         };
-        document.getElementById('cm-edit').onclick = () => { openEditModal(iconId); menu.style.display = 'none'; };
-        document.getElementById('cm-move').onclick = () => { openMoveModal(iconId); menu.style.display = 'none'; };
-        document.getElementById('cm-delete').onclick = () => { deleteIcon(iconId); menu.style.display = 'none'; };
+        document.getElementById('cm-edit').onclick = () => {
+            if (type === 'icon') editIcon(id);
+            else editFolder(id);
+            menu.style.display = 'none';
+        };
+        if (type === 'icon') {
+            document.getElementById('cm-move').onclick = () => { openMoveModal(id); menu.style.display = 'none'; };
+        }
+        const item = type === 'icon' ? icons.find(i => i.id === id) : folders.find(f => f.id === id);
+        if (item && item.pin) {
+            document.getElementById('cm-remove-password').onclick = () => {
+                showRemovePasswordModal(id, type, item.pin, item.hint);
+                menu.style.display = 'none';
+            };
+        } else {
+            document.getElementById('cm-remove-password').style.display = 'none';
+        }
+        document.getElementById('cm-delete').onclick = () => {
+            if (type === 'icon') deleteIcon(id);
+            else deleteFolder(id);
+            menu.style.display = 'none';
+        };
         
         setTimeout(() => { document.addEventListener('click', function closeMenu() { menu.style.display = 'none'; document.removeEventListener('click', closeMenu); }); }, 100);
     }
@@ -716,20 +952,6 @@
         openWindows.forEach(w => taskbarWindows.appendChild(w.btn));
     }
     
-    function openEditModal(id) {
-        const icon = icons.find(i => i.id === id);
-        if (!icon) return;
-        window.editingIconId = id;
-        updateFolderSelects();
-        document.getElementById('modalTitle').innerText = 'Edit Icon';
-        document.getElementById('iconLabel').value = icon.label;
-        document.getElementById('iconLink').value = icon.link || '';
-        document.getElementById('iconImageUrl').value = icon.image || '';
-        document.getElementById('iconPin').value = icon.pin || '';
-        document.getElementById('iconFolderSelect').value = icon.folderId || '';
-        document.getElementById('iconModal').style.display = 'flex';
-    }
-    
     function deleteIcon(id) {
         if (confirm('Move to Recycle Bin?')) {
             const icon = icons.find(i => i.id === id);
@@ -745,17 +967,32 @@
         }
     }
     
-    function editFolderName(id) {
-        const folder = folders.find(f => f.id === id);
-        if (!folder) return;
-        const newName = prompt('New folder name:', folder.name);
-        if (newName) { folder.name = newName; saveAll(); renderAll(); }
+    function addFolder() {
+        window.editingFolderId = null;
+        document.getElementById('folderName').value = '';
+        document.getElementById('folderPin').value = '';
+        document.getElementById('folderHint').value = '';
+        document.getElementById('folderModal').style.display = 'flex';
     }
     
-    function addFolder() {
-        const name = prompt('Folder name:');
-        if (name) folders.push({ id: Date.now(), name: name, x: 30 + folders.length * 20, y: 30 + folders.length * 20, dateAdded: Date.now() });
+    function saveFolder() {
+        const name = document.getElementById('folderName').value.trim();
+        if (!name) { alert('Enter a folder name'); return; }
+        const pin = document.getElementById('folderPin').value.trim();
+        const hint = document.getElementById('folderHint').value.trim();
+        
+        if (window.editingFolderId) {
+            const idx = folders.findIndex(f => f.id === window.editingFolderId);
+            if (idx !== -1) {
+                folders[idx].name = name;
+                folders[idx].pin = pin;
+                folders[idx].hint = hint;
+            }
+        } else {
+            folders.push({ id: Date.now(), name: name, pin: pin, hint: hint, x: 30 + folders.length * 20, y: 30 + folders.length * 20, dateAdded: Date.now() });
+        }
         saveAll(); renderAll();
+        document.getElementById('folderModal').style.display = 'none';
     }
     
     function addWidget() {
@@ -817,7 +1054,7 @@
     function sortByName() { icons.sort((a,b) => a.label.localeCompare(b.label)); folders.sort((a,b) => a.name.localeCompare(b.name)); saveAll(); renderAll(); }
     function sortByDate() { icons.sort((a,b) => a.dateAdded - b.dateAdded); folders.sort((a,b) => a.dateAdded - b.dateAdded); saveAll(); renderAll(); }
     function legacyExport() { const data = { icons, folders, stickers, widgets, recycleBin, currentWallpaper, currentTheme }; const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `retro-desktop-backup-${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(url); alert('Backup exported!'); }
-    function playStartupSound() { if (document.getElementById('startupSoundToggle')?.checked) { const audio = new Audio('https://www.soundjay.com/misc/sounds/windows-startup-1.mp3'); audio.volume = 0.3; audio.play().catch(e=>console.log('Sound blocked')); } }
+    function playStartupSound() { if (document.getElementById('startupSoundToggle')?.checked) { const audio = new Audio('https://www.soundjay.com/misc/sounds/computer-startup-1_1.mp3'); audio.volume = 0.3; audio.play().catch(e=>console.log('Sound blocked')); } }
     function startBootScreen() { const boot = document.createElement('div'); boot.className = 'boot-screen'; boot.innerHTML = '<div>Starting Windows 95...<br><span style="font-size:12px">' + new Date().toDateString() + '</span></div>'; document.body.appendChild(boot); setTimeout(() => boot.remove(), 2500); }
     let idleTimer, screensaverActive = false;
     function startScreensaver() { if (screensaverActive) return; screensaverActive = true; document.getElementById('screensaver').classList.add('active'); }
@@ -829,29 +1066,45 @@
     // Event Listeners
     document.getElementById('startButton').onclick = () => document.getElementById('startMenu').classList.toggle('show');
     document.addEventListener('click', (e) => { if (!document.getElementById('startButton').contains(e.target) && !document.getElementById('startMenu').contains(e.target)) document.getElementById('startMenu').classList.remove('show'); });
-    document.getElementById('addIconBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); window.editingIconId = null; updateFolderSelects(); document.getElementById('modalTitle').innerText = 'Add Icon'; document.getElementById('iconLabel').value = ''; document.getElementById('iconLink').value = ''; document.getElementById('iconImageUrl').value = ''; document.getElementById('iconPin').value = ''; document.getElementById('iconFolderSelect').value = ''; document.getElementById('iconModal').style.display = 'flex'; };
+    
+    document.getElementById('addIconBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); window.editingIconId = null; updateFolderSelects(); document.getElementById('modalTitle').innerText = 'Add Icon'; document.getElementById('iconLabel').value = ''; document.getElementById('iconLink').value = ''; document.getElementById('iconImageUrl').value = ''; document.getElementById('iconPin').value = ''; document.getElementById('iconHint').value = ''; document.getElementById('iconFolderSelect').value = ''; document.getElementById('iconModal').style.display = 'flex'; };
+    
     document.getElementById('saveIconBtn').onclick = () => {
         const label = document.getElementById('iconLabel').value.trim();
         if (!label) return alert('Enter a name');
         const link = document.getElementById('iconLink').value.trim();
         let image = document.getElementById('iconImageUrl').value.trim() || '📄';
         const pin = document.getElementById('iconPin').value.trim();
+        const hint = document.getElementById('iconHint').value.trim();
         const folderId = document.getElementById('iconFolderSelect').value;
         if (window.editingIconId) {
             const idx = icons.findIndex(i => i.id === window.editingIconId);
-            if (idx !== -1) { icons[idx].label = label; icons[idx].link = link || '#'; icons[idx].image = image; icons[idx].pin = pin; icons[idx].folderId = folderId === '' ? null : parseInt(folderId); }
+            if (idx !== -1) { icons[idx].label = label; icons[idx].link = link || '#'; icons[idx].image = image; icons[idx].pin = pin; icons[idx].hint = hint; icons[idx].folderId = folderId === '' ? null : parseInt(folderId); }
         } else {
-            icons.push({ id: Date.now(), label, link: link || '#', image, pin, folderId: folderId === '' ? null : parseInt(folderId), x: 30 + icons.length * 20, y: 30 + icons.length * 20, dateAdded: Date.now() });
+            icons.push({ id: Date.now(), label, link: link || '#', image, pin, hint, folderId: folderId === '' ? null : parseInt(folderId), x: 30 + icons.length * 20, y: 30 + icons.length * 20, dateAdded: Date.now() });
         }
         saveAll(); renderAll(); document.getElementById('iconModal').style.display = 'none';
     };
+    
+    document.getElementById('addFolderBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); addFolder(); };
+    document.getElementById('saveFolderBtn').onclick = saveFolder;
+    document.getElementById('closeFolderModal').onclick = () => document.getElementById('folderModal').style.display = 'none';
+    
     document.getElementById('confirmMoveBtn').onclick = () => {
         const folderId = document.getElementById('moveFolderSelect').value;
-        if (contextIconId) moveIconToFolder(contextIconId, folderId);
+        if (contextItemId) moveIconToFolder(contextItemId, folderId);
         document.getElementById('moveToFolderModal').style.display = 'none';
     };
     document.getElementById('closeMoveModal').onclick = () => document.getElementById('moveToFolderModal').style.display = 'none';
-    document.getElementById('addFolderBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); addFolder(); };
+    
+    document.getElementById('submitPasswordBtn').onclick = submitPassword;
+    document.getElementById('cancelPasswordBtn').onclick = cancelPassword;
+    document.getElementById('closePasswordModal').onclick = cancelPassword;
+    
+    document.getElementById('confirmRemovePasswordBtn').onclick = confirmRemovePassword;
+    document.getElementById('cancelRemovePasswordBtn').onclick = cancelRemovePassword;
+    document.getElementById('closeRemovePasswordModal').onclick = cancelRemovePassword;
+    
     document.getElementById('addWidgetBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); addWidget(); };
     document.getElementById('addStickerBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); showStickerSelector(); };
     document.getElementById('stickerEmojiBtn').onclick = () => { document.getElementById('emojiGrid').style.display = 'flex'; document.getElementById('stickerImageUrl').style.display = 'none'; document.getElementById('addImageStickerBtn').style.display = 'none'; };
@@ -867,6 +1120,7 @@
     document.getElementById('sortByDateBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); sortByDate(); };
     document.getElementById('legacyBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); legacyExport(); };
     document.getElementById('settingsBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); document.getElementById('settingsModal').style.display = 'flex'; };
+    
     document.getElementById('closeModal').onclick = () => document.getElementById('iconModal').style.display = 'none';
     document.getElementById('closeWallpaperModal').onclick = () => document.getElementById('wallpaperModal').style.display = 'none';
     document.getElementById('closeThemeModal').onclick = () => document.getElementById('themeModal').style.display = 'none';
