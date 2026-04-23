@@ -37,18 +37,6 @@
         .edit-icon-btn:hover { background: #000080; color: white; }
         .move-icon-btn:hover { background: #00aa00; color: white; }
         
-        /* Locked overlay */
-        .locked-icon::after {
-            content: "🔒";
-            position: absolute;
-            bottom: -5px;
-            right: -5px;
-            font-size: 14px;
-            background: rgba(0,0,0,0.5);
-            border-radius: 10px;
-            padding: 0 2px;
-        }
-        
         .sticker { position: absolute; cursor: move; z-index: 50; font-size: 48px; transition: transform 0.1s ease; }
         .sticker:hover { transform: scale(1.05); filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.3)); }
         .sticker .delete-sticker {
@@ -126,7 +114,6 @@
             font-size: 9px; cursor: pointer; display: none; color: white; line-height: 14px;
         }
         .folder-item:hover .move-to-desktop-btn { display: block; }
-        .folder-item.locked-folder-item { opacity: 0.7; }
         
         .taskbar {
             background: #c0c0c0; border-top: 2px solid #ffffff; padding: 4px 8px;
@@ -172,13 +159,8 @@
         }
         .retro-button:active { border: 2px solid #000; border-right-color: #fff; border-bottom-color: #fff; }
         
-        .password-modal {
-            text-align: center;
-        }
-        .password-modal .hint-text {
-            background: #ffffcc; padding: 8px; margin: 10px 0; font-size: 11px;
-            border: 1px solid #808080;
-        }
+        .password-modal { text-align: center; }
+        .hint-text { background: #ffffcc; padding: 8px; margin: 10px 0; font-size: 11px; border: 1px solid #808080; }
         
         .context-menu {
             position: fixed; background: #c0c0c0; border: 2px solid #fff;
@@ -279,9 +261,11 @@
     let nextWindowZ = 2100;
     let contextItemId = null;
     let contextItemType = null;
-    let pendingUnlockCallback = null;
-    let pendingRemovePasswordId = null;
-    let pendingRemovePasswordType = null;
+    
+    // Password callback variables
+    let pendingPasswordCallback = null;
+    let pendingPasswordItem = null;
+    let pendingActionType = null;
     
     function saveAll() {
         const allData = { icons, folders, stickers, widgets, recycleBin, currentWallpaper, currentTheme };
@@ -327,66 +311,82 @@
         }
     }
     
-    // Password verification
-    function verifyPassword(item, type, callback) {
-        if (!item.pin) {
-            callback(true);
-            return;
-        }
-        pendingUnlockCallback = callback;
+    // ========== PASSWORD FUNCTIONS ==========
+    function showPasswordModal(item, onSuccess) {
+        pendingPasswordItem = item;
+        pendingPasswordCallback = onSuccess;
         const modal = document.getElementById('passwordModal');
         const hintDisplay = document.getElementById('hintDisplay');
-        if (item.hint) {
+        
+        if (item.hint && item.hint.trim() !== '') {
             hintDisplay.style.display = 'block';
             hintDisplay.innerHTML = `💡 Hint: ${escapeHtml(item.hint)}`;
         } else {
             hintDisplay.style.display = 'none';
         }
+        
+        document.getElementById('passwordInput').value = '';
         modal.style.display = 'flex';
     }
     
     function submitPassword() {
-        const password = document.getElementById('passwordInput').value;
+        const enteredPassword = document.getElementById('passwordInput').value;
         const modal = document.getElementById('passwordModal');
-        if (pendingUnlockCallback) {
-            pendingUnlockCallback(password);
-            pendingUnlockCallback = null;
+        
+        if (pendingPasswordCallback && pendingPasswordItem) {
+            const isCorrect = (enteredPassword === pendingPasswordItem.pin);
+            if (isCorrect) {
+                modal.style.display = 'none';
+                pendingPasswordCallback(true);
+            } else {
+                alert('Incorrect password!');
+                document.getElementById('passwordInput').value = '';
+                // Don't close modal, let them try again
+            }
+        } else {
+            modal.style.display = 'none';
         }
-        document.getElementById('passwordInput').value = '';
-        modal.style.display = 'none';
     }
     
     function cancelPassword() {
-        if (pendingUnlockCallback) {
-            pendingUnlockCallback(false);
-            pendingUnlockCallback = null;
+        if (pendingPasswordCallback) {
+            pendingPasswordCallback(false);
         }
-        document.getElementById('passwordInput').value = '';
         document.getElementById('passwordModal').style.display = 'none';
+        document.getElementById('passwordInput').value = '';
+        pendingPasswordCallback = null;
+        pendingPasswordItem = null;
     }
     
     // Remove password with verification
-    function showRemovePasswordModal(id, type, currentPin, hint) {
-        pendingRemovePasswordId = id;
-        pendingRemovePasswordType = type;
+    let pendingRemoveId = null;
+    let pendingRemoveType = null;
+    
+    function showRemovePasswordModal(id, type, item) {
+        pendingRemoveId = id;
+        pendingRemoveType = type;
         const modal = document.getElementById('removePasswordModal');
         const hintDisplay = document.getElementById('removeHintDisplay');
-        if (hint) {
+        
+        if (item.hint && item.hint.trim() !== '') {
             hintDisplay.style.display = 'block';
-            hintDisplay.innerHTML = `💡 Hint: ${escapeHtml(hint)}`;
+            hintDisplay.innerHTML = `💡 Hint: ${escapeHtml(item.hint)}`;
         } else {
             hintDisplay.style.display = 'none';
         }
+        
+        document.getElementById('removePasswordInput').value = '';
         modal.style.display = 'flex';
     }
     
     function confirmRemovePassword() {
         const enteredPassword = document.getElementById('removePasswordInput').value;
         let item = null;
-        if (pendingRemovePasswordType === 'icon') {
-            item = icons.find(i => i.id === pendingRemovePasswordId);
-        } else if (pendingRemovePasswordType === 'folder') {
-            item = folders.find(f => f.id === pendingRemovePasswordId);
+        
+        if (pendingRemoveType === 'icon') {
+            item = icons.find(i => i.id === pendingRemoveId);
+        } else if (pendingRemoveType === 'folder') {
+            item = folders.find(f => f.id === pendingRemoveId);
         }
         
         if (item && item.pin === enteredPassword) {
@@ -400,15 +400,15 @@
         } else {
             alert('Incorrect password! Cannot remove password protection.');
         }
-        pendingRemovePasswordId = null;
-        pendingRemovePasswordType = null;
+        pendingRemoveId = null;
+        pendingRemoveType = null;
     }
     
     function cancelRemovePassword() {
         document.getElementById('removePasswordModal').style.display = 'none';
         document.getElementById('removePasswordInput').value = '';
-        pendingRemovePasswordId = null;
-        pendingRemovePasswordType = null;
+        pendingRemoveId = null;
+        pendingRemoveType = null;
     }
     
     function renderAll() {
@@ -430,7 +430,6 @@
         desktopIcons.forEach(icon => {
             const div = document.createElement('div');
             div.className = 'desktop-icon';
-            if (icon.pin) div.classList.add('locked-icon');
             div.setAttribute('data-id', icon.id);
             const isEmoji = icon.image && (icon.image.length <= 4 || /[\u{1F300}-\u{1F9FF}]/u.test(icon.image));
             div.innerHTML = `<div class="icon-action-btn edit-icon-btn" data-id="${icon.id}">✏️</div>
@@ -438,7 +437,7 @@
                              <div class="icon-action-btn move-icon-btn" data-id="${icon.id}">📁 Move</div>
                              ${icon.pin ? `<div class="icon-action-btn lock-icon-btn" data-id="${icon.id}">🔒</div>` : ''}
                              ${isEmoji ? `<div class="icon-img">${icon.image || '📄'}</div>` : `<img src="${icon.image}" onerror="this.parentElement.innerHTML='<div class=icon-img>📄</div>'">`}
-                             <div class="icon-label">${escapeHtml(icon.label)}</div>`;
+                             <div class="icon-label">${escapeHtml(icon.label)}${icon.pin ? ' 🔒' : ''}</div>`;
             if (window.innerWidth > 768) {
                 div.style.position = 'absolute';
                 div.style.left = (icon.x || 30) + 'px';
@@ -458,13 +457,12 @@
         folders.forEach(folder => {
             const div = document.createElement('div');
             div.className = 'folder-icon';
-            if (folder.pin) div.classList.add('locked-icon');
             div.setAttribute('data-id', folder.id);
             div.innerHTML = `<div class="icon-action-btn edit-icon-btn" data-id="${folder.id}">✏️</div>
                              <div class="icon-action-btn delete-icon-btn" data-id="${folder.id}">✗</div>
                              ${folder.pin ? `<div class="icon-action-btn lock-icon-btn" data-id="${folder.id}">🔒</div>` : ''}
                              <div class="icon-img">📁</div>
-                             <div class="icon-label">${escapeHtml(folder.name)} (${icons.filter(i => i.folderId === folder.id).length})</div>`;
+                             <div class="icon-label">${escapeHtml(folder.name)}${folder.pin ? ' 🔒' : ''} (${icons.filter(i => i.folderId === folder.id).length})</div>`;
             if (window.innerWidth > 768) {
                 div.style.position = 'absolute';
                 div.style.left = (folder.x || 30) + 'px';
@@ -488,11 +486,9 @@
         if (!folder) return;
         
         if (folder.pin) {
-            verifyPassword(folder, 'folder', (isCorrect) => {
-                if (isCorrect === true) {
+            showPasswordModal(folder, (success) => {
+                if (success) {
                     openFolder(folderId);
-                } else if (isCorrect === false) {
-                    alert('Incorrect password!');
                 }
             });
         } else {
@@ -502,15 +498,37 @@
     
     function openIconWithPassword(icon) {
         if (icon.pin) {
-            verifyPassword(icon, 'icon', (isCorrect) => {
-                if (isCorrect === true) {
+            showPasswordModal(icon, (success) => {
+                if (success) {
                     if (icon.link) openInDesktopWindow(icon.link, icon.label);
-                } else if (isCorrect === false) {
-                    alert('Incorrect password!');
                 }
             });
         } else {
             if (icon.link) openInDesktopWindow(icon.link, icon.label);
+        }
+    }
+    
+    function editIconWithPassword(icon) {
+        if (icon.pin) {
+            showPasswordModal(icon, (success) => {
+                if (success) {
+                    openEditIconModal(icon.id);
+                }
+            });
+        } else {
+            openEditIconModal(icon.id);
+        }
+    }
+    
+    function editFolderWithPassword(folder) {
+        if (folder.pin) {
+            showPasswordModal(folder, (success) => {
+                if (success) {
+                    openEditFolderModal(folder.id);
+                }
+            });
+        } else {
+            openEditFolderModal(folder.id);
         }
     }
     
@@ -554,7 +572,6 @@
         folderIcons.forEach(icon => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'folder-item';
-            if (icon.pin) itemDiv.classList.add('locked-folder-item');
             const isEmoji = icon.image && (icon.image.length <= 4 || /[\u{1F300}-\u{1F9FF}]/u.test(icon.image));
             itemDiv.innerHTML = `<div class="remove-from-folder" data-id="${icon.id}">✗</div>
                                  <div class="move-to-desktop-btn" data-id="${icon.id}">🏠</div>
@@ -680,27 +697,11 @@
             el.ontouchend = () => { clearTimeout(pressTimer); setTimeout(() => el.classList.remove('long-press'), 100); };
             el.ontouchmove = () => { clearTimeout(pressTimer); };
             
-            el.querySelector('.edit-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editIcon(id); });
+            el.querySelector('.edit-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editIconWithPassword(icon); });
             el.querySelector('.delete-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); deleteIcon(id); });
             el.querySelector('.move-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); openMoveModal(id); });
-            el.querySelector('.lock-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editIcon(id); });
+            el.querySelector('.lock-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editIconWithPassword(icon); });
         });
-    }
-    
-    function editIcon(id) {
-        const icon = icons.find(i => i.id === id);
-        if (!icon) return;
-        if (icon.pin) {
-            verifyPassword(icon, 'icon', (isCorrect) => {
-                if (isCorrect === true) {
-                    openEditIconModal(id);
-                } else if (isCorrect === false) {
-                    alert('Incorrect password! Cannot edit.');
-                }
-            });
-        } else {
-            openEditIconModal(id);
-        }
     }
     
     function openEditIconModal(id) {
@@ -718,22 +719,6 @@
         document.getElementById('iconModal').style.display = 'flex';
     }
     
-    function editFolder(id) {
-        const folder = folders.find(f => f.id === id);
-        if (!folder) return;
-        if (folder.pin) {
-            verifyPassword(folder, 'folder', (isCorrect) => {
-                if (isCorrect === true) {
-                    openEditFolderModal(id);
-                } else if (isCorrect === false) {
-                    alert('Incorrect password! Cannot edit.');
-                }
-            });
-        } else {
-            openEditFolderModal(id);
-        }
-    }
-    
     function openEditFolderModal(id) {
         const folder = folders.find(f => f.id === id);
         if (!folder) return;
@@ -744,23 +729,31 @@
         document.getElementById('folderModal').style.display = 'flex';
     }
     
+    function editFolder(id) {
+        const folder = folders.find(f => f.id === id);
+        if (!folder) return;
+        editFolderWithPassword(folder);
+    }
+    
     function showContextMenu(x, y, id, type) {
         contextItemId = id;
         contextItemType = type;
         const menu = document.getElementById('contextMenu');
+        const item = type === 'icon' ? icons.find(i => i.id === id) : folders.find(f => f.id === id);
+        
         if (type === 'icon') {
             menu.innerHTML = `
                 <div class="context-menu-item" id="cm-open">🔗 Open</div>
                 <div class="context-menu-item" id="cm-edit">✏️ Edit</div>
                 <div class="context-menu-item" id="cm-move">📁 Move to Folder</div>
-                <div class="context-menu-item" id="cm-remove-password">🔓 Remove Password</div>
+                ${item && item.pin ? '<div class="context-menu-item" id="cm-remove-password">🔓 Remove Password</div>' : ''}
                 <div class="context-menu-item" id="cm-delete">🗑️ Delete</div>
             `;
         } else {
             menu.innerHTML = `
                 <div class="context-menu-item" id="cm-open">📂 Open</div>
                 <div class="context-menu-item" id="cm-edit">✏️ Edit</div>
-                <div class="context-menu-item" id="cm-remove-password">🔓 Remove Password</div>
+                ${item && item.pin ? '<div class="context-menu-item" id="cm-remove-password">🔓 Remove Password</div>' : ''}
                 <div class="context-menu-item" id="cm-delete">🗑️ Delete</div>
             `;
         }
@@ -778,21 +771,29 @@
             menu.style.display = 'none';
         };
         document.getElementById('cm-edit').onclick = () => {
-            if (type === 'icon') editIcon(id);
-            else editFolder(id);
+            if (type === 'icon') {
+                const icon = icons.find(i => i.id === id);
+                if (icon) editIconWithPassword(icon);
+            } else {
+                const folder = folders.find(f => f.id === id);
+                if (folder) editFolderWithPassword(folder);
+            }
             menu.style.display = 'none';
         };
-        if (type === 'icon') {
+        if (type === 'icon' && document.getElementById('cm-move')) {
             document.getElementById('cm-move').onclick = () => { openMoveModal(id); menu.style.display = 'none'; };
         }
-        const item = type === 'icon' ? icons.find(i => i.id === id) : folders.find(f => f.id === id);
-        if (item && item.pin) {
+        if (document.getElementById('cm-remove-password')) {
             document.getElementById('cm-remove-password').onclick = () => {
-                showRemovePasswordModal(id, type, item.pin, item.hint);
+                if (type === 'icon') {
+                    const icon = icons.find(i => i.id === id);
+                    if (icon) showRemovePasswordModal(id, 'icon', icon);
+                } else {
+                    const folder = folders.find(f => f.id === id);
+                    if (folder) showRemovePasswordModal(id, 'folder', folder);
+                }
                 menu.style.display = 'none';
             };
-        } else {
-            document.getElementById('cm-remove-password').style.display = 'none';
         }
         document.getElementById('cm-delete').onclick = () => {
             if (type === 'icon') deleteIcon(id);
