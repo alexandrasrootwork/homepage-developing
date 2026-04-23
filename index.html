@@ -1368,7 +1368,7 @@
     function sortByName() { icons.sort((a,b) => a.label.localeCompare(b.label)); folders.sort((a,b) => a.name.localeCompare(b.name)); saveAll(); renderAll(); }
     function sortByDate() { icons.sort((a,b) => a.dateAdded - b.dateAdded); folders.sort((a,b) => a.dateAdded - b.dateAdded); saveAll(); renderAll(); }
     function legacyExport() { const data = { icons, folders, stickers, widgets, recycleBin, currentWallpaper, currentTheme }; const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `retro-desktop-backup-${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(url); alert('Backup exported!'); }
-    function playStartupSound() { if (document.getElementById('startupSoundToggle')?.checked) { const audio = new Audio('https://www.soundjay.com/misc/sounds/computer-startup-1_1.mp3'); audio.volume = 0.3; audio.play().catch(e=>console.log('Sound blocked')); } }
+    function playStartupSound() { if (document.getElementById('startupSoundToggle')?.checked) { const audio = new Audio('sounds/winxp.mp3'); audio.volume = 0.3; audio.play().catch(e=>console.log('Sound blocked')); } }
     function startBootScreen() { const boot = document.createElement('div'); boot.className = 'boot-screen'; boot.innerHTML = '<div>Starting Windows 95...<br><span style="font-size:12px">' + new Date().toDateString() + '</span></div>'; document.body.appendChild(boot); setTimeout(() => boot.remove(), 2500); }
     let idleTimer, screensaverActive = false;
     function startScreensaver() { if (screensaverActive) return; screensaverActive = true; document.getElementById('screensaver').classList.add('active'); }
