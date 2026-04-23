@@ -102,7 +102,7 @@
             font-size: 12px;
         }
         .save-status { font-size: 9px; margin-right: 8px; color: #aaffaa; }
-        .close-widget { cursor: pointer; }
+        .hide-widget { cursor: pointer; }
         
         /* Notes Manager Window */
         .notes-manager {
@@ -111,8 +111,8 @@
             border: 2px solid #fff;
             border-right-color: #000;
             border-bottom-color: #000;
-            width: 500px;
-            height: 400px;
+            width: 550px;
+            height: 450px;
             z-index: 2100;
             display: none;
             flex-direction: column;
@@ -141,6 +141,7 @@
         .note-item:hover { background: #ffff99; }
         .note-date { font-size: 10px; color: #666; margin-bottom: 5px; }
         .note-preview { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .note-status { font-size: 10px; color: #666; margin-top: 5px; }
         .delete-note-btn {
             float: right;
             background: #c0c0c0;
@@ -150,6 +151,17 @@
             font-size: 10px;
         }
         .delete-note-btn:hover { background: #ff0000; color: white; }
+        .show-note-btn {
+            float: right;
+            background: #000080;
+            color: white;
+            border: 1px solid #fff;
+            padding: 2px 6px;
+            cursor: pointer;
+            font-size: 10px;
+            margin-right: 5px;
+        }
+        .show-note-btn:hover { background: #0000aa; }
         
         .desktop-window {
             position: fixed; background: #c0c0c0; border: 2px solid #fff;
@@ -350,8 +362,9 @@
         <span style="cursor:pointer" id="closeNotesManager">✗</span>
     </div>
     <div class="notes-list" id="notesList"></div>
-    <div style="padding:8px; background:#c0c0c0;">
-        <button id="deleteAllNotesBtn" class="retro-button">Delete All Notes</button>
+    <div style="padding:8px; background:#c0c0c0; display:flex; gap:8px;">
+        <button id="showAllNotesBtn" class="retro-button">📂 Show All Notes</button>
+        <button id="deleteAllNotesBtn" class="retro-button">🗑️ Delete All Notes</button>
     </div>
 </div>
 
@@ -480,25 +493,34 @@
             noteDiv.className = 'note-item';
             const date = new Date(widget.dateAdded || widget.id).toLocaleString();
             const preview = widget.text ? widget.text.substring(0, 100) : '(empty note)';
+            // Check if widget is visible on desktop
+            const widgetDiv = document.querySelector(`.widget[data-widget-id="${widget.id}"]`);
+            const isVisible = widgetDiv && widgetDiv.style.display !== 'none';
             noteDiv.innerHTML = `
                 <div class="delete-note-btn" data-id="${widget.id}">✗</div>
+                <div class="show-note-btn" data-id="${widget.id}">📂 Show</div>
                 <div class="note-date">📅 ${date}</div>
                 <div class="note-preview">${escapeHtml(preview)}${widget.text && widget.text.length > 100 ? '...' : ''}</div>
+                <div class="note-status">${isVisible ? '🟢 Visible on desktop' : '🔴 Hidden'}</div>
             `;
-            noteDiv.onclick = (e) => {
-                if (e.target.classList.contains('delete-note-btn')) return;
-                const widgetDiv = document.querySelector(`.widget[data-widget-id="${widget.id}"]`);
-                if (widgetDiv) {
-                    widgetDiv.style.zIndex = nextWindowZ++;
-                    widgetDiv.style.display = 'block';
+            noteDiv.querySelector('.show-note-btn').onclick = (e) => {
+                e.stopPropagation();
+                const targetDiv = document.querySelector(`.widget[data-widget-id="${widget.id}"]`);
+                if (targetDiv) {
+                    targetDiv.style.display = 'block';
+                    targetDiv.style.zIndex = nextWindowZ++;
+                    saveAll();
+                    refreshNotesManager();
                 }
             };
             noteDiv.querySelector('.delete-note-btn').onclick = (e) => {
                 e.stopPropagation();
-                if (confirm('Delete this note?')) {
+                if (confirm('Delete this note permanently?')) {
+                    // Delete the widget completely
+                    const targetDiv = document.querySelector(`.widget[data-widget-id="${widget.id}"]`);
+                    if (targetDiv) targetDiv.remove();
                     widgets = widgets.filter(w => w.id !== widget.id);
                     saveAll();
-                    renderWidgets();
                     refreshNotesManager();
                 }
             };
@@ -511,6 +533,13 @@
         refreshNotesManager();
         manager.style.display = 'flex';
         manager.style.zIndex = nextWindowZ++;
+    }
+    
+    function showAllNotes() {
+        document.querySelectorAll('.widget').forEach(div => {
+            div.style.display = 'block';
+        });
+        if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
     }
     
     function selectSticker(stickerId) {
@@ -1091,6 +1120,7 @@
     function renderWidgets() {
         const existing = document.querySelectorAll('.widget');
         existing.forEach(w => w.remove());
+        
         widgets.forEach(widget => {
             const div = document.createElement('div');
             div.className = 'widget';
@@ -1100,13 +1130,17 @@
             div.style.width = (widget.width || 220) + 'px';
             div.style.height = (widget.height || 160) + 'px';
             div.style.position = 'absolute';
-            div.innerHTML = `<div class="widget-title-bar"><span>📝 Sticky Note</span><div><span class="save-status" style="font-size:9px; margin-right:8px; color:#aaffaa;">💾 Saved</span><span class="close-widget" data-id="${widget.id}" style="cursor:pointer;">✗</span></div></div>
+            div.style.display = 'block';
+            div.innerHTML = `<div class="widget-title-bar"><span>📝 Sticky Note</span><div><span class="save-status" style="font-size:9px; margin-right:8px; color:#aaffaa;">💾 Saved</span><span class="hide-widget" data-id="${widget.id}" style="cursor:pointer;">✗</span></div></div>
                             <div class="widget-content"><textarea class="note-textarea" data-id="${widget.id}" placeholder="Write your note here...">${escapeHtml(widget.text || '')}</textarea></div>`;
             document.querySelector('.desktop').appendChild(div);
+            
             makeWindowDraggable(div, div.querySelector('.widget-title-bar'));
+            
             const textarea = div.querySelector('textarea');
             const saveStatus = div.querySelector('.save-status');
             let saveTimeout = null;
+            
             textarea.addEventListener('input', (e) => { 
                 widget.text = e.target.value;
                 saveStatus.textContent = '💾 Saving...';
@@ -1116,28 +1150,33 @@
                     saveAll();
                     saveStatus.textContent = '✅ Saved';
                     saveStatus.style.color = '#aaffaa';
-                    setTimeout(() => { if (saveStatus) saveStatus.textContent = '💾 Saved'; }, 1000);
+                    setTimeout(() => {
+                        if (saveStatus) saveStatus.textContent = '💾 Saved';
+                    }, 1000);
+                    if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
                 }, 300);
-                if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
             });
-            const closeBtn = div.querySelector('.close-widget');
-            closeBtn.addEventListener('click', () => {
+            
+            const hideBtn = div.querySelector('.hide-widget');
+            hideBtn.addEventListener('click', () => {
                 widget.text = textarea.value;
                 saveAll();
-                widgets = widgets.filter(w => w.id !== widget.id);
-                saveAll();
-                renderWidgets();
+                div.style.display = 'none';
                 if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
             });
+            
             div.addEventListener('focusout', () => {
                 widget.text = textarea.value;
                 saveAll();
                 if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
             });
+            
             const resizeObserver = new ResizeObserver(() => {
-                widget.width = div.offsetWidth;
-                widget.height = div.offsetHeight;
-                saveAll();
+                if (div.style.display !== 'none') {
+                    widget.width = div.offsetWidth;
+                    widget.height = div.offsetHeight;
+                    saveAll();
+                }
             });
             resizeObserver.observe(div);
         });
@@ -1145,13 +1184,23 @@
     
     function addWidget() {
         const newId = Date.now();
-        widgets.push({ id: newId, text: '', x: 100 + (widgets.length * 20), y: 100 + (widgets.length * 20), width: 220, height: 160, dateAdded: newId });
+        widgets.push({ 
+            id: newId, 
+            text: '', 
+            x: 100 + (widgets.length * 20), 
+            y: 100 + (widgets.length * 20), 
+            width: 220, 
+            height: 160, 
+            dateAdded: newId
+        });
         saveAll();
         renderWidgets();
     }
     
     function deleteAllNotes() {
-        if (confirm('Delete ALL sticky notes? This cannot be undone.')) {
+        if (confirm('Delete ALL sticky notes permanently? This cannot be undone.')) {
+            // Remove all widget DOM elements
+            document.querySelectorAll('.widget').forEach(w => w.remove());
             widgets = [];
             saveAll();
             renderWidgets();
@@ -1356,6 +1405,7 @@
     document.getElementById('addWidgetBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); addWidget(); };
     document.getElementById('viewAllNotesBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); showNotesManager(); };
     document.getElementById('closeNotesManager').onclick = () => document.getElementById('notesManager').style.display = 'none';
+    document.getElementById('showAllNotesBtn').onclick = () => showAllNotes();
     document.getElementById('deleteAllNotesBtn').onclick = () => deleteAllNotes();
     document.getElementById('confirmMoveBtn').onclick = () => { const folderId = document.getElementById('moveFolderSelect').value; if (contextItemId) moveIconToFolder(contextItemId, folderId); document.getElementById('moveToFolderModal').style.display = 'none'; };
     document.getElementById('closeMoveModal').onclick = () => document.getElementById('moveToFolderModal').style.display = 'none';
