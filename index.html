@@ -37,36 +37,20 @@
         .edit-icon-btn:hover { background: #000080; color: white; }
         .move-icon-btn:hover { background: #00aa00; color: white; }
         
-        /* Sticker with resize handles */
         .sticker {
-            position: absolute;
-            cursor: move;
-            z-index: 50;
-            transition: box-shadow 0.1s ease;
-            display: inline-block;
+            position: absolute; cursor: move; z-index: 50; transition: box-shadow 0.1s ease; display: inline-block;
         }
-        .sticker.selected {
-            outline: 2px dotted #000080;
-            outline-offset: 2px;
-        }
+        .sticker.selected { outline: 2px dotted #000080; outline-offset: 2px; }
         .sticker .delete-sticker {
             position: absolute; top: -8px; right: -8px; width: 16px; height: 16px;
             background: #c0c0c0; border: 1px solid #000; border-radius: 10px;
-            font-size: 10px; text-align: center; line-height: 14px; cursor: pointer; display: none;
-            z-index: 55;
+            font-size: 10px; text-align: center; line-height: 14px; cursor: pointer; display: none; z-index: 55;
         }
         .sticker:hover .delete-sticker { display: block; }
         .sticker.selected .delete-sticker { display: block; }
         
-        /* Resize handles */
         .resize-handle {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            background: #000080;
-            border: 1px solid white;
-            z-index: 60;
-            display: none;
+            position: absolute; width: 10px; height: 10px; background: #000080; border: 1px solid white; z-index: 60; display: none;
         }
         .sticker.selected .resize-handle { display: block; }
         .resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
@@ -80,7 +64,7 @@
         
         .sticker img, .sticker .sticker-emoji { pointer-events: none; display: block; }
         
-        /* Widget (Sticky Note) - FIXED */
+        /* Widget (Sticky Note) */
         .widget {
             position: absolute;
             background: #ffffcc;
@@ -117,6 +101,7 @@
             outline: none;
             font-size: 12px;
         }
+        .save-status { font-size: 9px; margin-right: 8px; color: #aaffaa; }
         .close-widget { cursor: pointer; }
         
         /* Notes Manager Window */
@@ -395,7 +380,6 @@
 <div class="context-menu" id="contextMenu"></div>
 
 <script>
-    // ========== DATA ==========
     let icons = [];
     let folders = [];
     let stickers = [];
@@ -457,7 +441,6 @@
         }
     }
     
-    // ========== TASKBAR FUNCTIONS ==========
     function addTaskbarButton(windowId, title, windowElement) {
         const container = document.getElementById('taskbarWindowsContainer');
         const existingBtn = document.querySelector(`.taskbar-window-btn[data-window-id="${windowId}"]`);
@@ -482,7 +465,6 @@
         if (btn) btn.remove();
     }
     
-    // ========== NOTES MANAGER ==========
     function refreshNotesManager() {
         const notesList = document.getElementById('notesList');
         if (!notesList) return;
@@ -505,7 +487,6 @@
             `;
             noteDiv.onclick = (e) => {
                 if (e.target.classList.contains('delete-note-btn')) return;
-                // Find and bring the widget to front
                 const widgetDiv = document.querySelector(`.widget[data-widget-id="${widget.id}"]`);
                 if (widgetDiv) {
                     widgetDiv.style.zIndex = nextWindowZ++;
@@ -532,7 +513,6 @@
         manager.style.zIndex = nextWindowZ++;
     }
     
-    // ========== STICKER RESIZING ==========
     function selectSticker(stickerId) {
         document.querySelectorAll('.sticker').forEach(s => s.classList.remove('selected'));
         if (hideHandlesTimeout) clearTimeout(hideHandlesTimeout);
@@ -557,17 +537,8 @@
             const handle = document.createElement('div');
             handle.className = `resize-handle ${dir}`;
             stickerDiv.appendChild(handle);
-            
-            handle.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                startResize(e, stickerDiv, stickerId, dir);
-            });
-            handle.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                startResize(e, stickerDiv, stickerId, dir);
-            });
+            handle.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); startResize(e, stickerDiv, stickerId, dir); });
+            handle.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); startResize(e, stickerDiv, stickerId, dir); });
         });
     }
     
@@ -581,7 +552,6 @@
         const startHeight = stickerDiv.offsetHeight;
         const startLeft = stickerDiv.offsetLeft;
         const startTop = stickerDiv.offsetTop;
-        
         const sticker = stickers.find(s => s.id === stickerId);
         if (!sticker) return;
         
@@ -594,72 +564,47 @@
             let newHeight = startHeight;
             let newLeft = startLeft;
             let newTop = startTop;
-            
             if (direction.includes('e')) newWidth = Math.max(20, startWidth + dx);
-            if (direction.includes('w')) {
-                newWidth = Math.max(20, startWidth - dx);
-                newLeft = startLeft + dx;
-            }
+            if (direction.includes('w')) { newWidth = Math.max(20, startWidth - dx); newLeft = startLeft + dx; }
             if (direction.includes('s')) newHeight = Math.max(20, startHeight + dy);
-            if (direction.includes('n')) {
-                newHeight = Math.max(20, startHeight - dy);
-                newTop = startTop + dy;
-            }
-            
+            if (direction.includes('n')) { newHeight = Math.max(20, startHeight - dy); newTop = startTop + dy; }
             stickerDiv.style.width = newWidth + 'px';
             stickerDiv.style.height = newHeight + 'px';
             stickerDiv.style.left = newLeft + 'px';
             stickerDiv.style.top = newTop + 'px';
-            
             const contentDiv = stickerDiv.querySelector('.sticker-content');
             if (contentDiv) {
                 const baseSize = Math.min(newWidth, newHeight) * 0.8;
                 if (sticker.isImage) {
                     const img = contentDiv.querySelector('img');
-                    if (img) {
-                        img.style.maxWidth = '100%';
-                        img.style.maxHeight = '100%';
-                    }
-                } else {
-                    contentDiv.style.fontSize = baseSize + 'px';
-                }
+                    if (img) { img.style.maxWidth = '100%'; img.style.maxHeight = '100%'; }
+                } else { contentDiv.style.fontSize = baseSize + 'px'; }
             }
-            
-            sticker.width = newWidth;
-            sticker.height = newHeight;
-            sticker.x = newLeft;
-            sticker.y = newTop;
+            sticker.width = newWidth; sticker.height = newHeight; sticker.x = newLeft; sticker.y = newTop;
             sticker.fontSize = Math.min(newWidth, newHeight) * 0.8;
             saveAll();
         }
-        
         function stopResize() {
             document.removeEventListener('mousemove', doResize);
             document.removeEventListener('mouseup', stopResize);
             document.removeEventListener('touchmove', doResize);
             document.removeEventListener('touchend', stopResize);
         }
-        
         document.addEventListener('mousemove', doResize);
         document.addEventListener('mouseup', stopResize);
         document.addEventListener('touchmove', doResize);
         document.addEventListener('touchend', stopResize);
     }
     
-    // ========== PASSWORD FUNCTIONS ==========
     function showPasswordModal(item, onSuccess) {
         pendingPasswordItem = item;
         pendingPasswordCallback = onSuccess;
         const modal = document.getElementById('passwordModal');
         const hintDisplay = document.getElementById('hintDisplay');
-        
         if (item.hint && item.hint.trim() !== '') {
             hintDisplay.style.display = 'block';
             hintDisplay.innerHTML = `💡 Hint: ${escapeHtml(item.hint)}`;
-        } else {
-            hintDisplay.style.display = 'none';
-        }
-        
+        } else { hintDisplay.style.display = 'none'; }
         document.getElementById('passwordInput').value = '';
         modal.style.display = 'flex';
     }
@@ -667,46 +612,32 @@
     function submitPassword() {
         const enteredPassword = document.getElementById('passwordInput').value;
         const modal = document.getElementById('passwordModal');
-        
         if (pendingPasswordCallback && pendingPasswordItem) {
-            const isCorrect = (enteredPassword === pendingPasswordItem.pin);
-            if (isCorrect) {
+            if (enteredPassword === pendingPasswordItem.pin) {
                 modal.style.display = 'none';
                 pendingPasswordCallback(true);
                 document.getElementById('passwordInput').value = '';
-            } else {
-                alert('Incorrect password!');
-                document.getElementById('passwordInput').value = '';
-            }
-        } else {
-            modal.style.display = 'none';
-        }
+            } else { alert('Incorrect password!'); document.getElementById('passwordInput').value = ''; }
+        } else { modal.style.display = 'none'; }
     }
     
     function cancelPassword() {
         if (pendingPasswordCallback) pendingPasswordCallback(false);
         document.getElementById('passwordModal').style.display = 'none';
         document.getElementById('passwordInput').value = '';
-        pendingPasswordCallback = null;
-        pendingPasswordItem = null;
+        pendingPasswordCallback = null; pendingPasswordItem = null;
     }
     
-    let pendingRemoveId = null;
-    let pendingRemoveType = null;
+    let pendingRemoveId = null, pendingRemoveType = null;
     
     function showRemovePasswordModal(id, type, item) {
-        pendingRemoveId = id;
-        pendingRemoveType = type;
+        pendingRemoveId = id; pendingRemoveType = type;
         const modal = document.getElementById('removePasswordModal');
         const hintDisplay = document.getElementById('removeHintDisplay');
-        
         if (item.hint && item.hint.trim() !== '') {
             hintDisplay.style.display = 'block';
             hintDisplay.innerHTML = `💡 Hint: ${escapeHtml(item.hint)}`;
-        } else {
-            hintDisplay.style.display = 'none';
-        }
-        
+        } else { hintDisplay.style.display = 'none'; }
         document.getElementById('removePasswordInput').value = '';
         modal.style.display = 'flex';
     }
@@ -714,33 +645,21 @@
     function confirmRemovePassword() {
         const enteredPassword = document.getElementById('removePasswordInput').value;
         let item = null;
-        
-        if (pendingRemoveType === 'icon') {
-            item = icons.find(i => i.id === pendingRemoveId);
-        } else if (pendingRemoveType === 'folder') {
-            item = folders.find(f => f.id === pendingRemoveId);
-        }
-        
+        if (pendingRemoveType === 'icon') item = icons.find(i => i.id === pendingRemoveId);
+        else if (pendingRemoveType === 'folder') item = folders.find(f => f.id === pendingRemoveId);
         if (item && item.pin === enteredPassword) {
-            item.pin = '';
-            item.hint = '';
-            saveAll();
-            renderAll();
+            item.pin = ''; item.hint = ''; saveAll(); renderAll();
             alert('Password removed successfully!');
             document.getElementById('removePasswordModal').style.display = 'none';
             document.getElementById('removePasswordInput').value = '';
-        } else {
-            alert('Incorrect password! Cannot remove password protection.');
-        }
-        pendingRemoveId = null;
-        pendingRemoveType = null;
+        } else { alert('Incorrect password! Cannot remove password protection.'); }
+        pendingRemoveId = null; pendingRemoveType = null;
     }
     
     function cancelRemovePassword() {
         document.getElementById('removePasswordModal').style.display = 'none';
         document.getElementById('removePasswordInput').value = '';
-        pendingRemoveId = null;
-        pendingRemoveType = null;
+        pendingRemoveId = null; pendingRemoveType = null;
     }
     
     function renderAll() {
@@ -756,9 +675,7 @@
         const container = document.getElementById('iconsContainer');
         const existing = container.querySelectorAll('.desktop-icon:not(.folder-icon)');
         existing.forEach(el => el.remove());
-        
         const desktopIcons = icons.filter(icon => !icon.folderId);
-        
         desktopIcons.forEach(icon => {
             const div = document.createElement('div');
             div.className = 'desktop-icon';
@@ -785,7 +702,6 @@
         const container = document.getElementById('iconsContainer');
         const existing = container.querySelectorAll('.folder-icon');
         existing.forEach(el => el.remove());
-        
         folders.forEach(folder => {
             const div = document.createElement('div');
             div.className = 'folder-icon';
@@ -803,7 +719,6 @@
             }
             container.appendChild(div);
         });
-        
         document.querySelectorAll('.folder-icon').forEach(el => {
             const id = parseInt(el.dataset.id);
             el.ondblclick = () => openFolderWithPassword(id);
@@ -816,24 +731,15 @@
     function openFolderWithPassword(folderId) {
         const folder = folders.find(f => f.id === folderId);
         if (!folder) return;
-        
         if (folder.pin) {
-            showPasswordModal(folder, (success) => {
-                if (success) openFolder(folderId);
-            });
-        } else {
-            openFolder(folderId);
-        }
+            showPasswordModal(folder, (success) => { if (success) openFolder(folderId); });
+        } else { openFolder(folderId); }
     }
     
     function openIconWithPassword(icon) {
         if (icon.pin) {
-            showPasswordModal(icon, (success) => {
-                if (success) openOrFocusWindow(icon.link, icon.label);
-            });
-        } else {
-            if (icon.link) openOrFocusWindow(icon.link, icon.label);
-        }
+            showPasswordModal(icon, (success) => { if (success) openOrFocusWindow(icon.link, icon.label); });
+        } else { if (icon.link) openOrFocusWindow(icon.link, icon.label); }
     }
     
     function openOrFocusWindow(url, title) {
@@ -848,38 +754,25 @@
     
     function editIconWithPassword(icon) {
         if (icon.pin) {
-            showPasswordModal(icon, (success) => {
-                if (success) openEditIconModal(icon.id);
-            });
-        } else {
-            openEditIconModal(icon.id);
-        }
+            showPasswordModal(icon, (success) => { if (success) openEditIconModal(icon.id); });
+        } else { openEditIconModal(icon.id); }
     }
     
     function editFolderWithPassword(folder) {
         if (folder.pin) {
-            showPasswordModal(folder, (success) => {
-                if (success) openEditFolderModal(folder.id);
-            });
-        } else {
-            openEditFolderModal(folder.id);
-        }
+            showPasswordModal(folder, (success) => { if (success) openEditFolderModal(folder.id); });
+        } else { openEditFolderModal(folder.id); }
     }
     
     function moveIconToDesktop(iconId) {
         const icon = icons.find(i => i.id === iconId);
-        if (icon) {
-            icon.folderId = null;
-            saveAll();
-            renderAll();
-        }
+        if (icon) { icon.folderId = null; saveAll(); renderAll(); }
     }
     
     function moveAllToDesktop(folderId) {
         const folderIcons = icons.filter(icon => icon.folderId === folderId);
         folderIcons.forEach(icon => { icon.folderId = null; });
-        saveAll();
-        renderAll();
+        saveAll(); renderAll();
         const folderWindow = document.getElementById(`folder-${folderId}`);
         if (folderWindow && folderWindow.style.display === 'block') {
             const content = folderWindow.querySelector('.folder-content');
@@ -951,9 +844,7 @@
                         </div>
                         <div class="folder-content" style="padding:15px; background:#fff; flex:1; display:flex; flex-wrap:wrap; gap:15px; align-content:flex-start; overflow-y:auto;"></div>`;
         document.body.appendChild(win);
-        
         makeWindowDraggable(win, win.querySelector('.title-bar'));
-        
         win.querySelector('.close-folder').onclick = () => win.remove();
         win.querySelector('.maximize-folder').onclick = () => {
             if (win.style.width === '100%') {
@@ -966,7 +857,6 @@
         };
         win.querySelector('.move-all-to-desktop').onclick = () => moveAllToDesktop(id);
         win.onclick = () => win.style.zIndex = nextWindowZ++;
-        
         const content = win.querySelector('.folder-content');
         renderFolderContents(id, content);
         win.style.display = 'flex';
@@ -975,51 +865,36 @@
     function makeWindowDraggable(element, dragHandle) {
         let offsetX = 0, offsetY = 0, mouseX = 0, mouseY = 0;
         let isDragging = false;
-        
         dragHandle.onmousedown = startDrag;
         dragHandle.ontouchstart = startDrag;
-        
         function startDrag(e) {
-            if (e.target.classList.contains('close-folder') || 
-                e.target.classList.contains('maximize-folder') ||
-                e.target.classList.contains('close-window') ||
-                e.target.classList.contains('maximize-window')) return;
+            if (e.target.classList.contains('close-folder') || e.target.classList.contains('maximize-folder') ||
+                e.target.classList.contains('close-window') || e.target.classList.contains('maximize-window')) return;
             e.preventDefault();
             isDragging = true;
             const clientX = e.clientX ?? e.touches[0].clientX;
             const clientY = e.clientY ?? e.touches[0].clientY;
-            mouseX = clientX;
-            mouseY = clientY;
-            offsetX = element.offsetLeft;
-            offsetY = element.offsetTop;
-            document.onmouseup = stopDrag;
-            document.onmousemove = drag;
-            document.ontouchend = stopDrag;
-            document.ontouchmove = drag;
+            mouseX = clientX; mouseY = clientY;
+            offsetX = element.offsetLeft; offsetY = element.offsetTop;
+            document.onmouseup = stopDrag; document.onmousemove = drag;
+            document.ontouchend = stopDrag; document.ontouchmove = drag;
             element.style.cursor = 'grabbing';
         }
-        
         function drag(e) {
-            if (!isDragging) return;
-            e.preventDefault();
+            if (!isDragging) return; e.preventDefault();
             const clientX = e.clientX ?? e.touches[0].clientX;
             const clientY = e.clientY ?? e.touches[0].clientY;
-            let dx = clientX - mouseX;
-            let dy = clientY - mouseY;
-            let newLeft = offsetX + dx;
-            let newTop = offsetY + dy;
+            let dx = clientX - mouseX, dy = clientY - mouseY;
+            let newLeft = offsetX + dx, newTop = offsetY + dy;
             newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 100));
             newTop = Math.max(0, Math.min(newTop, window.innerHeight - 50));
             element.style.left = newLeft + 'px';
             element.style.top = newTop + 'px';
         }
-        
         function stopDrag() {
             isDragging = false;
-            document.onmouseup = null;
-            document.onmousemove = null;
-            document.ontouchend = null;
-            document.ontouchmove = null;
+            document.onmouseup = null; document.onmousemove = null;
+            document.ontouchend = null; document.ontouchmove = null;
             element.style.cursor = '';
         }
     }
@@ -1028,10 +903,8 @@
         const icon = icons.find(i => i.id === iconId);
         if (icon) {
             icon.folderId = folderId === '' ? null : parseInt(folderId);
-            icon.x = 30;
-            icon.y = 30;
-            saveAll();
-            renderAll();
+            icon.x = 30; icon.y = 30;
+            saveAll(); renderAll();
         }
     }
     
@@ -1046,23 +919,12 @@
         document.querySelectorAll('.desktop-icon').forEach(el => {
             const id = parseInt(el.dataset.id);
             const icon = icons.find(i => i.id === id);
-            
-            el.onclick = (e) => {
-                if (e.target.classList.contains('icon-action-btn')) return;
-                openIconWithPassword(icon);
-            };
-            
-            el.oncontextmenu = (e) => {
-                e.preventDefault();
-                showContextMenu(e.clientX, e.clientY, id, 'icon');
-                return false;
-            };
-            
+            el.onclick = (e) => { if (e.target.classList.contains('icon-action-btn')) return; openIconWithPassword(icon); };
+            el.oncontextmenu = (e) => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, id, 'icon'); return false; };
             let pressTimer;
             el.ontouchstart = () => { pressTimer = setTimeout(() => { el.classList.add('long-press'); const rect = el.getBoundingClientRect(); showContextMenu(rect.left, rect.top, id, 'icon'); }, 800); };
             el.ontouchend = () => { clearTimeout(pressTimer); setTimeout(() => el.classList.remove('long-press'), 100); };
             el.ontouchmove = () => { clearTimeout(pressTimer); };
-            
             el.querySelector('.edit-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editIconWithPassword(icon); });
             el.querySelector('.delete-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); deleteIcon(id); });
             el.querySelector('.move-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); openMoveModal(id); });
@@ -1102,48 +964,30 @@
     }
     
     function showContextMenu(x, y, id, type) {
-        contextItemId = id;
-        contextItemType = type;
+        contextItemId = id; contextItemType = type;
         const menu = document.getElementById('contextMenu');
         const item = type === 'icon' ? icons.find(i => i.id === id) : folders.find(f => f.id === id);
-        
         if (type === 'icon') {
-            menu.innerHTML = `
-                <div class="context-menu-item" id="cm-open">🔗 Open</div>
-                <div class="context-menu-item" id="cm-edit">✏️ Edit</div>
-                <div class="context-menu-item" id="cm-move">📁 Move to Folder</div>
-                ${item && item.pin ? '<div class="context-menu-item" id="cm-remove-password">🔓 Remove Password</div>' : ''}
-                <div class="context-menu-item" id="cm-delete">🗑️ Delete</div>
-            `;
+            menu.innerHTML = `<div class="context-menu-item" id="cm-open">🔗 Open</div>
+                             <div class="context-menu-item" id="cm-edit">✏️ Edit</div>
+                             <div class="context-menu-item" id="cm-move">📁 Move to Folder</div>
+                             ${item && item.pin ? '<div class="context-menu-item" id="cm-remove-password">🔓 Remove Password</div>' : ''}
+                             <div class="context-menu-item" id="cm-delete">🗑️ Delete</div>`;
         } else {
-            menu.innerHTML = `
-                <div class="context-menu-item" id="cm-open">📂 Open</div>
-                <div class="context-menu-item" id="cm-edit">✏️ Edit</div>
-                ${item && item.pin ? '<div class="context-menu-item" id="cm-remove-password">🔓 Remove Password</div>' : ''}
-                <div class="context-menu-item" id="cm-delete">🗑️ Delete</div>
-            `;
+            menu.innerHTML = `<div class="context-menu-item" id="cm-open">📂 Open</div>
+                             <div class="context-menu-item" id="cm-edit">✏️ Edit</div>
+                             ${item && item.pin ? '<div class="context-menu-item" id="cm-remove-password">🔓 Remove Password</div>' : ''}
+                             <div class="context-menu-item" id="cm-delete">🗑️ Delete</div>`;
         }
-        menu.style.left = x + 'px';
-        menu.style.top = y + 'px';
-        menu.style.display = 'block';
-        
+        menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block';
         document.getElementById('cm-open').onclick = () => {
-            if (type === 'icon') {
-                const icon = icons.find(i => i.id === id);
-                if (icon) openIconWithPassword(icon);
-            } else {
-                openFolderWithPassword(id);
-            }
+            if (type === 'icon') { const icon = icons.find(i => i.id === id); if (icon) openIconWithPassword(icon); }
+            else { openFolderWithPassword(id); }
             menu.style.display = 'none';
         };
         document.getElementById('cm-edit').onclick = () => {
-            if (type === 'icon') {
-                const icon = icons.find(i => i.id === id);
-                if (icon) editIconWithPassword(icon);
-            } else {
-                const folder = folders.find(f => f.id === id);
-                if (folder) editFolderWithPassword(folder);
-            }
+            if (type === 'icon') { const icon = icons.find(i => i.id === id); if (icon) editIconWithPassword(icon); }
+            else { const folder = folders.find(f => f.id === id); if (folder) editFolderWithPassword(folder); }
             menu.style.display = 'none';
         };
         if (type === 'icon' && document.getElementById('cm-move')) {
@@ -1151,43 +995,29 @@
         }
         if (document.getElementById('cm-remove-password')) {
             document.getElementById('cm-remove-password').onclick = () => {
-                if (type === 'icon') {
-                    const icon = icons.find(i => i.id === id);
-                    if (icon) showRemovePasswordModal(id, 'icon', icon);
-                } else {
-                    const folder = folders.find(f => f.id === id);
-                    if (folder) showRemovePasswordModal(id, 'folder', folder);
-                }
+                if (type === 'icon') { const icon = icons.find(i => i.id === id); if (icon) showRemovePasswordModal(id, 'icon', icon); }
+                else { const folder = folders.find(f => f.id === id); if (folder) showRemovePasswordModal(id, 'folder', folder); }
                 menu.style.display = 'none';
             };
         }
-        document.getElementById('cm-delete').onclick = () => {
-            if (type === 'icon') deleteIcon(id);
-            else deleteFolder(id);
-            menu.style.display = 'none';
-        };
-        
+        document.getElementById('cm-delete').onclick = () => { if (type === 'icon') deleteIcon(id); else deleteFolder(id); menu.style.display = 'none'; };
         setTimeout(() => { document.addEventListener('click', function closeMenu() { menu.style.display = 'none'; document.removeEventListener('click', closeMenu); }); }, 100);
     }
     
     function renderStickers() {
         const existing = document.querySelectorAll('.sticker');
         existing.forEach(s => s.remove());
-        
         stickers.forEach(sticker => {
             const stickerDiv = document.createElement('div');
             stickerDiv.className = 'sticker';
             stickerDiv.setAttribute('data-id', sticker.id);
             stickerDiv.style.left = (sticker.x || 100) + 'px';
             stickerDiv.style.top = (sticker.y || 100) + 'px';
-            
             const width = sticker.width || 60;
             const height = sticker.height || 60;
             stickerDiv.style.width = width + 'px';
             stickerDiv.style.height = height + 'px';
-            
             const fontSize = sticker.fontSize || 48;
-            
             if (sticker.isImage) {
                 stickerDiv.innerHTML = `<div class="delete-sticker" data-id="${sticker.id}">✗</div>
                                        <div class="sticker-content" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
@@ -1199,26 +1029,17 @@
                                            ${sticker.emoji}
                                        </div>`;
             }
-            
             document.querySelector('.desktop').appendChild(stickerDiv);
             makeStickerDraggable(stickerDiv, sticker.id);
             makeStickerResizable(stickerDiv, sticker.id);
-            
-            stickerDiv.addEventListener('click', (e) => {
-                if (e.target.classList.contains('delete-sticker')) return;
-                e.stopPropagation();
-                selectSticker(sticker.id);
-            });
-            
+            stickerDiv.addEventListener('click', (e) => { if (e.target.classList.contains('delete-sticker')) return; e.stopPropagation(); selectSticker(sticker.id); });
             stickerDiv.querySelector('.delete-sticker')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 stickers = stickers.filter(s => s.id !== sticker.id);
                 if (selectedStickerId === sticker.id) selectedStickerId = null;
-                saveAll();
-                renderStickers();
+                saveAll(); renderStickers();
             });
         });
-        
         document.querySelector('.desktop').addEventListener('click', (e) => {
             if (!e.target.closest('.sticker')) {
                 document.querySelectorAll('.sticker').forEach(s => s.classList.remove('selected'));
@@ -1231,65 +1052,45 @@
     function makeStickerDraggable(stickerDiv, stickerId) {
         let offsetX = 0, offsetY = 0, mouseX = 0, mouseY = 0;
         let isDragging = false;
-        
         stickerDiv.onmousedown = startDrag;
         stickerDiv.ontouchstart = startDrag;
-        
         function startDrag(e) {
             if (e.target.classList.contains('delete-sticker') || e.target.classList.contains('resize-handle')) return;
             e.preventDefault();
             isDragging = true;
             const clientX = e.clientX ?? e.touches[0].clientX;
             const clientY = e.clientY ?? e.touches[0].clientY;
-            mouseX = clientX;
-            mouseY = clientY;
-            offsetX = stickerDiv.offsetLeft;
-            offsetY = stickerDiv.offsetTop;
-            document.onmouseup = stopDrag;
-            document.onmousemove = drag;
-            document.ontouchend = stopDrag;
-            document.ontouchmove = drag;
+            mouseX = clientX; mouseY = clientY;
+            offsetX = stickerDiv.offsetLeft; offsetY = stickerDiv.offsetTop;
+            document.onmouseup = stopDrag; document.onmousemove = drag;
+            document.ontouchend = stopDrag; document.ontouchmove = drag;
             stickerDiv.style.cursor = 'grabbing';
             stickerDiv.style.zIndex = '1000';
         }
-        
         function drag(e) {
-            if (!isDragging) return;
-            e.preventDefault();
+            if (!isDragging) return; e.preventDefault();
             const clientX = e.clientX ?? e.touches[0].clientX;
             const clientY = e.clientY ?? e.touches[0].clientY;
-            let dx = clientX - mouseX;
-            let dy = clientY - mouseY;
-            let newLeft = offsetX + dx;
-            let newTop = offsetY + dy;
+            let dx = clientX - mouseX, dy = clientY - mouseY;
+            let newLeft = offsetX + dx, newTop = offsetY + dy;
             newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 50));
             newTop = Math.max(0, Math.min(newTop, window.innerHeight - 50));
             stickerDiv.style.left = newLeft + 'px';
             stickerDiv.style.top = newTop + 'px';
-            
             const sticker = stickers.find(s => s.id === stickerId);
-            if (sticker) {
-                sticker.x = newLeft;
-                sticker.y = newTop;
-                saveAll();
-            }
+            if (sticker) { sticker.x = newLeft; sticker.y = newTop; saveAll(); }
         }
-        
         function stopDrag() {
             isDragging = false;
-            document.onmouseup = null;
-            document.onmousemove = null;
-            document.ontouchend = null;
-            document.ontouchmove = null;
-            stickerDiv.style.cursor = '';
-            stickerDiv.style.zIndex = '';
+            document.onmouseup = null; document.onmousemove = null;
+            document.ontouchend = null; document.ontouchmove = null;
+            stickerDiv.style.cursor = ''; stickerDiv.style.zIndex = '';
         }
     }
     
     function renderWidgets() {
         const existing = document.querySelectorAll('.widget');
         existing.forEach(w => w.remove());
-        
         widgets.forEach(widget => {
             const div = document.createElement('div');
             div.className = 'widget';
@@ -1298,27 +1099,41 @@
             div.style.top = (widget.y || 100) + 'px';
             div.style.width = (widget.width || 220) + 'px';
             div.style.height = (widget.height || 160) + 'px';
-            div.innerHTML = `<div class="widget-title-bar"><span>📝 Sticky Note</span><span class="close-widget" data-id="${widget.id}">✗</span></div>
+            div.style.position = 'absolute';
+            div.innerHTML = `<div class="widget-title-bar"><span>📝 Sticky Note</span><div><span class="save-status" style="font-size:9px; margin-right:8px; color:#aaffaa;">💾 Saved</span><span class="close-widget" data-id="${widget.id}" style="cursor:pointer;">✗</span></div></div>
                             <div class="widget-content"><textarea class="note-textarea" data-id="${widget.id}" placeholder="Write your note here...">${escapeHtml(widget.text || '')}</textarea></div>`;
             document.querySelector('.desktop').appendChild(div);
-            
             makeWindowDraggable(div, div.querySelector('.widget-title-bar'));
-            
-            div.querySelector('.close-widget').addEventListener('click', () => {
+            const textarea = div.querySelector('textarea');
+            const saveStatus = div.querySelector('.save-status');
+            let saveTimeout = null;
+            textarea.addEventListener('input', (e) => { 
+                widget.text = e.target.value;
+                saveStatus.textContent = '💾 Saving...';
+                saveStatus.style.color = '#ffffaa';
+                if (saveTimeout) clearTimeout(saveTimeout);
+                saveTimeout = setTimeout(() => {
+                    saveAll();
+                    saveStatus.textContent = '✅ Saved';
+                    saveStatus.style.color = '#aaffaa';
+                    setTimeout(() => { if (saveStatus) saveStatus.textContent = '💾 Saved'; }, 1000);
+                }, 300);
+                if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
+            });
+            const closeBtn = div.querySelector('.close-widget');
+            closeBtn.addEventListener('click', () => {
+                widget.text = textarea.value;
+                saveAll();
                 widgets = widgets.filter(w => w.id !== widget.id);
                 saveAll();
                 renderWidgets();
                 if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
             });
-            
-            const textarea = div.querySelector('textarea');
-            textarea.addEventListener('input', (e) => { 
-                widget.text = e.target.value;
+            div.addEventListener('focusout', () => {
+                widget.text = textarea.value;
                 saveAll();
                 if (document.getElementById('notesManager').style.display === 'flex') refreshNotesManager();
             });
-            
-            // Make resizable
             const resizeObserver = new ResizeObserver(() => {
                 widget.width = div.offsetWidth;
                 widget.height = div.offsetHeight;
@@ -1330,15 +1145,7 @@
     
     function addWidget() {
         const newId = Date.now();
-        widgets.push({ 
-            id: newId, 
-            text: '', 
-            x: 100 + (widgets.length * 20), 
-            y: 100 + (widgets.length * 20), 
-            width: 220, 
-            height: 160,
-            dateAdded: newId
-        });
+        widgets.push({ id: newId, text: '', x: 100 + (widgets.length * 20), y: 100 + (widgets.length * 20), width: 220, height: 160, dateAdded: newId });
         saveAll();
         renderWidgets();
     }
@@ -1353,106 +1160,32 @@
         }
     }
     
-    function renderStickers() {
-        const existing = document.querySelectorAll('.sticker');
-        existing.forEach(s => s.remove());
-        
-        stickers.forEach(sticker => {
-            const stickerDiv = document.createElement('div');
-            stickerDiv.className = 'sticker';
-            stickerDiv.setAttribute('data-id', sticker.id);
-            stickerDiv.style.left = (sticker.x || 100) + 'px';
-            stickerDiv.style.top = (sticker.y || 100) + 'px';
-            
-            const width = sticker.width || 60;
-            const height = sticker.height || 60;
-            stickerDiv.style.width = width + 'px';
-            stickerDiv.style.height = height + 'px';
-            
-            const fontSize = sticker.fontSize || 48;
-            
-            if (sticker.isImage) {
-                stickerDiv.innerHTML = `<div class="delete-sticker" data-id="${sticker.id}">✗</div>
-                                       <div class="sticker-content" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
-                                           <img src="${escapeHtml(sticker.emoji)}" style="max-width:100%; max-height:100%; width:auto; height:auto;">
-                                       </div>`;
-            } else {
-                stickerDiv.innerHTML = `<div class="delete-sticker" data-id="${sticker.id}">✗</div>
-                                       <div class="sticker-content sticker-emoji" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:${fontSize}px; line-height:1;">
-                                           ${sticker.emoji}
-                                       </div>`;
-            }
-            
-            document.querySelector('.desktop').appendChild(stickerDiv);
-            makeStickerDraggable(stickerDiv, sticker.id);
-            makeStickerResizable(stickerDiv, sticker.id);
-            
-            stickerDiv.addEventListener('click', (e) => {
-                if (e.target.classList.contains('delete-sticker')) return;
-                e.stopPropagation();
-                selectSticker(sticker.id);
-            });
-            
-            stickerDiv.querySelector('.delete-sticker')?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                stickers = stickers.filter(s => s.id !== sticker.id);
-                if (selectedStickerId === sticker.id) selectedStickerId = null;
-                saveAll();
-                renderStickers();
-            });
-        });
-        
-        document.querySelector('.desktop').addEventListener('click', (e) => {
-            if (!e.target.closest('.sticker')) {
-                document.querySelectorAll('.sticker').forEach(s => s.classList.remove('selected'));
-                if (hideHandlesTimeout) clearTimeout(hideHandlesTimeout);
-                selectedStickerId = null;
-            }
-        });
-    }
-    
     function makeDraggable(element, id, type) {
         let offsetX = 0, offsetY = 0, mouseX = 0, mouseY = 0;
         let isDragging = false;
-        
         element.onmousedown = startDrag;
-        
         function startDrag(e) {
-            if (e.target.classList?.contains('icon-action-btn') || 
-                e.target.classList?.contains('delete-sticker') || 
-                e.target.classList?.contains('close-widget')) return;
+            if (e.target.classList?.contains('icon-action-btn') || e.target.classList?.contains('delete-sticker') || e.target.classList?.contains('close-widget')) return;
             e.preventDefault();
             isDragging = true;
-            mouseX = e.clientX;
-            mouseY = e.clientY;
-            offsetX = element.offsetLeft;
-            offsetY = element.offsetTop;
-            document.onmouseup = stopDrag;
-            document.onmousemove = drag;
-            element.style.zIndex = '1000';
-            element.style.cursor = 'grabbing';
+            mouseX = e.clientX; mouseY = e.clientY;
+            offsetX = element.offsetLeft; offsetY = element.offsetTop;
+            document.onmouseup = stopDrag; document.onmousemove = drag;
+            element.style.zIndex = '1000'; element.style.cursor = 'grabbing';
         }
-        
         function drag(e) {
-            if (!isDragging) return;
-            e.preventDefault();
-            let dx = e.clientX - mouseX;
-            let dy = e.clientY - mouseY;
-            let newLeft = offsetX + dx;
-            let newTop = offsetY + dy;
+            if (!isDragging) return; e.preventDefault();
+            let dx = e.clientX - mouseX, dy = e.clientY - mouseY;
+            let newLeft = offsetX + dx, newTop = offsetY + dy;
             newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 100));
             newTop = Math.max(0, Math.min(newTop, window.innerHeight - 100));
-            element.style.left = newLeft + "px";
-            element.style.top = newTop + "px";
+            element.style.left = newLeft + "px"; element.style.top = newTop + "px";
             updatePosition(type, id, newLeft, newTop);
         }
-        
         function stopDrag() {
             isDragging = false;
-            document.onmouseup = null;
-            document.onmousemove = null;
-            element.style.zIndex = '';
-            element.style.cursor = '';
+            document.onmouseup = null; document.onmousemove = null;
+            element.style.zIndex = ''; element.style.cursor = '';
             saveAll();
         }
     }
@@ -1478,17 +1211,10 @@
         win.innerHTML = `<div class="title-bar"><span>${escapeHtml(title || 'Window')}</span><div><span class="maximize-window">□</span><span class="close-window">✗</span></div></div>
                         <div class="window-content"><iframe src="${url}" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"></iframe></div>`;
         document.body.appendChild(win);
-        
         const taskbarBtn = addTaskbarButton(windowId, title || 'Window', win);
         openWindows.push({ id: windowId, url: url, title: title, windowElement: win, taskbarBtn: taskbarBtn });
-        
         makeWindowDraggable(win, win.querySelector('.title-bar'));
-        
-        win.querySelector('.close-window').onclick = () => { 
-            win.remove(); 
-            removeTaskbarButton(windowId);
-            openWindows = openWindows.filter(w => w.id !== windowId);
-        };
+        win.querySelector('.close-window').onclick = () => { win.remove(); removeTaskbarButton(windowId); openWindows = openWindows.filter(w => w.id !== windowId); };
         win.querySelector('.maximize-window').onclick = () => {
             if (win.style.width === '100%') {
                 win.style.width = '700px'; win.style.height = '500px';
@@ -1529,14 +1255,9 @@
         if (!name) { alert('Enter a folder name'); return; }
         const pin = document.getElementById('folderPin').value.trim();
         const hint = document.getElementById('folderHint').value.trim();
-        
         if (window.editingFolderId) {
             const idx = folders.findIndex(f => f.id === window.editingFolderId);
-            if (idx !== -1) {
-                folders[idx].name = name;
-                folders[idx].pin = pin;
-                folders[idx].hint = hint;
-            }
+            if (idx !== -1) { folders[idx].name = name; folders[idx].pin = pin; folders[idx].hint = hint; }
         } else {
             folders.push({ id: Date.now(), name: name, pin: pin, hint: hint, x: 30 + folders.length * 20, y: 30 + folders.length * 20, dateAdded: Date.now() });
         }
@@ -1607,7 +1328,6 @@
     function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
     function updateClock() { document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' }); }
     
-    // Event Listeners
     document.getElementById('startButton').onclick = () => document.getElementById('startMenu').classList.toggle('show');
     document.addEventListener('click', (e) => { if (!document.getElementById('startButton').contains(e.target) && !document.getElementById('startMenu').contains(e.target)) document.getElementById('startMenu').classList.remove('show'); });
     
@@ -1633,28 +1353,18 @@
     document.getElementById('addFolderBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); addFolder(); };
     document.getElementById('saveFolderBtn').onclick = saveFolder;
     document.getElementById('closeFolderModal').onclick = () => document.getElementById('folderModal').style.display = 'none';
-    
     document.getElementById('addWidgetBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); addWidget(); };
-    
     document.getElementById('viewAllNotesBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); showNotesManager(); };
     document.getElementById('closeNotesManager').onclick = () => document.getElementById('notesManager').style.display = 'none';
     document.getElementById('deleteAllNotesBtn').onclick = () => deleteAllNotes();
-    
-    document.getElementById('confirmMoveBtn').onclick = () => {
-        const folderId = document.getElementById('moveFolderSelect').value;
-        if (contextItemId) moveIconToFolder(contextItemId, folderId);
-        document.getElementById('moveToFolderModal').style.display = 'none';
-    };
+    document.getElementById('confirmMoveBtn').onclick = () => { const folderId = document.getElementById('moveFolderSelect').value; if (contextItemId) moveIconToFolder(contextItemId, folderId); document.getElementById('moveToFolderModal').style.display = 'none'; };
     document.getElementById('closeMoveModal').onclick = () => document.getElementById('moveToFolderModal').style.display = 'none';
-    
     document.getElementById('submitPasswordBtn').onclick = submitPassword;
     document.getElementById('cancelPasswordBtn').onclick = cancelPassword;
     document.getElementById('closePasswordModal').onclick = cancelPassword;
-    
     document.getElementById('confirmRemovePasswordBtn').onclick = confirmRemovePassword;
     document.getElementById('cancelRemovePasswordBtn').onclick = cancelRemovePassword;
     document.getElementById('closeRemovePasswordModal').onclick = cancelRemovePassword;
-    
     document.getElementById('addStickerBtn').onclick = () => { document.getElementById('startMenu').classList.remove('show'); showStickerSelector(); };
     document.getElementById('stickerEmojiBtn').onclick = () => { document.getElementById('emojiGrid').style.display = 'flex'; document.getElementById('stickerImageUrl').style.display = 'none'; document.getElementById('addImageStickerBtn').style.display = 'none'; };
     document.getElementById('stickerImageUrlBtn').onclick = () => { document.getElementById('emojiGrid').style.display = 'none'; document.getElementById('stickerImageUrl').style.display = 'block'; document.getElementById('addImageStickerBtn').style.display = 'block'; };
@@ -1682,10 +1392,8 @@
     document.addEventListener('keydown', resetIdleTimer);
     document.addEventListener('click', resetIdleTimer);
     
-    // Make Notes Manager draggable
     makeWindowDraggable(document.getElementById('notesManager'), document.getElementById('notesManagerTitleBar'));
     
-    // Initialize
     loadAll();
     startBootScreen();
     setTimeout(() => playStartupSound(), 3000);
