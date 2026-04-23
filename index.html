@@ -37,14 +37,53 @@
         .edit-icon-btn:hover { background: #000080; color: white; }
         .move-icon-btn:hover { background: #00aa00; color: white; }
         
-        .sticker { position: absolute; cursor: move; z-index: 50; font-size: 48px; transition: transform 0.1s ease; }
-        .sticker:hover { transform: scale(1.05); filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.3)); }
+        /* Sticker with resize handles */
+        .sticker {
+            position: absolute;
+            cursor: move;
+            z-index: 50;
+            transition: box-shadow 0.1s ease;
+            display: inline-block;
+        }
+        .sticker.selected {
+            outline: 2px dotted #000080;
+            outline-offset: 2px;
+        }
         .sticker .delete-sticker {
             position: absolute; top: -8px; right: -8px; width: 16px; height: 16px;
             background: #c0c0c0; border: 1px solid #000; border-radius: 10px;
             font-size: 10px; text-align: center; line-height: 14px; cursor: pointer; display: none;
+            z-index: 55;
         }
         .sticker:hover .delete-sticker { display: block; }
+        .sticker.selected .delete-sticker { display: block; }
+        
+        /* Resize handles */
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #000080;
+            border: 1px solid white;
+            z-index: 60;
+            display: none;
+        }
+        .sticker.selected .resize-handle {
+            display: block;
+        }
+        .resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
+        .resize-handle.n { top: -5px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
+        .resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
+        .resize-handle.w { top: 50%; left: -5px; transform: translateY(-50%); cursor: w-resize; }
+        .resize-handle.e { top: 50%; right: -5px; transform: translateY(-50%); cursor: e-resize; }
+        .resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+        .resize-handle.s { bottom: -5px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
+        .resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
+        
+        .sticker img, .sticker .sticker-emoji {
+            pointer-events: none;
+            display: block;
+        }
         
         .widget {
             position: absolute; background: #c0c0c0; border: 2px solid #fff;
@@ -212,6 +251,7 @@
             .desktop-window, .folder-window { top: 10px !important; left: 10px !important; right: 10px !important; bottom: 50px !important; width: auto !important; height: auto !important; min-width: unset; }
             .move-icon-btn { left: auto; right: 30px; }
             .taskbar-window-btn { max-width: 100px; font-size: 10px; }
+            .resize-handle { width: 15px; height: 15px; } /* Larger handles for touch */
         }
     </style>
 </head>
@@ -276,12 +316,14 @@
     let stickers = [];
     let widgets = [];
     let recycleBin = [];
-    let openWindows = []; // Track open windows { id, url, title, windowElement }
+    let openWindows = [];
     let currentWallpaper = '';
     let currentTheme = 'teal';
     let nextWindowZ = 2100;
     let contextItemId = null;
     let contextItemType = null;
+    let selectedStickerId = null;
+    let hideHandlesTimeout = null;
     
     // Password callback variables
     let pendingPasswordCallback = null;
@@ -343,11 +385,8 @@
         btn.innerText = title.length > 20 ? title.substring(0, 18) + '...' : title;
         btn.onclick = (e) => {
             e.stopPropagation();
-            // Bring window to front
             windowElement.style.zIndex = nextWindowZ++;
             windowElement.style.display = 'flex';
-            // Scroll to show the window
-            windowElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         };
         container.appendChild(btn);
         container.scrollLeft = container.scrollWidth;
@@ -363,12 +402,123 @@
         return openWindows.find(w => w.url === url && w.title === title);
     }
     
-    function bringWindowToFront(windowId) {
-        const windowData = openWindows.find(w => w.id === windowId);
-        if (windowData && windowData.windowElement) {
-            windowData.windowElement.style.zIndex = nextWindowZ++;
-            windowData.windowElement.style.display = 'flex';
+    // ========== STICKER RESIZING ==========
+    function selectSticker(stickerId) {
+        // Remove selection from all stickers
+        document.querySelectorAll('.sticker').forEach(s => s.classList.remove('selected'));
+        if (hideHandlesTimeout) clearTimeout(hideHandlesTimeout);
+        
+        const stickerDiv = document.querySelector(`.sticker[data-id="${stickerId}"]`);
+        if (stickerDiv) {
+            stickerDiv.classList.add('selected');
+            selectedStickerId = stickerId;
+            
+            // Auto-hide handles after 3 seconds of no interaction
+            hideHandlesTimeout = setTimeout(() => {
+                if (selectedStickerId) {
+                    const s = document.querySelector(`.sticker[data-id="${selectedStickerId}"]`);
+                    if (s) s.classList.remove('selected');
+                    selectedStickerId = null;
+                }
+            }, 3000);
         }
+    }
+    
+    function makeStickerResizable(stickerDiv, stickerId) {
+        // Add resize handles
+        const handles = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se'];
+        handles.forEach(dir => {
+            const handle = document.createElement('div');
+            handle.className = `resize-handle ${dir}`;
+            stickerDiv.appendChild(handle);
+            
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startResize(e, stickerDiv, stickerId, dir);
+            });
+            handle.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startResize(e, stickerDiv, stickerId, dir);
+            });
+        });
+    }
+    
+    function startResize(e, stickerDiv, stickerId, direction) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startWidth = stickerDiv.offsetWidth;
+        const startHeight = stickerDiv.offsetHeight;
+        const startLeft = stickerDiv.offsetLeft;
+        const startTop = stickerDiv.offsetTop;
+        
+        const sticker = stickers.find(s => s.id === stickerId);
+        if (!sticker) return;
+        
+        function doResize(moveEvent) {
+            const dx = moveEvent.clientX - startX;
+            const dy = moveEvent.clientY - startY;
+            let newWidth = startWidth;
+            let newHeight = startHeight;
+            let newLeft = startLeft;
+            let newTop = startTop;
+            
+            if (direction.includes('e')) newWidth = Math.max(20, startWidth + dx);
+            if (direction.includes('w')) {
+                newWidth = Math.max(20, startWidth - dx);
+                newLeft = startLeft + dx;
+            }
+            if (direction.includes('s')) newHeight = Math.max(20, startHeight + dy);
+            if (direction.includes('n')) {
+                newHeight = Math.max(20, startHeight - dy);
+                newTop = startTop + dy;
+            }
+            
+            stickerDiv.style.width = newWidth + 'px';
+            stickerDiv.style.height = newHeight + 'px';
+            stickerDiv.style.left = newLeft + 'px';
+            stickerDiv.style.top = newTop + 'px';
+            
+            // Update the font size or image size proportionally
+            const contentDiv = stickerDiv.querySelector('.sticker-content');
+            if (contentDiv) {
+                const baseSize = Math.min(newWidth, newHeight) * 0.8;
+                if (sticker.isImage) {
+                    const img = contentDiv.querySelector('img');
+                    if (img) {
+                        img.style.width = baseSize + 'px';
+                        img.style.height = baseSize + 'px';
+                    }
+                } else {
+                    contentDiv.style.fontSize = baseSize + 'px';
+                }
+            }
+            
+            // Update stored sticker data
+            sticker.width = newWidth;
+            sticker.height = newHeight;
+            sticker.x = newLeft;
+            sticker.y = newTop;
+            sticker.fontSize = Math.min(newWidth, newHeight) * 0.8;
+            
+            saveAll();
+        }
+        
+        function stopResize() {
+            document.removeEventListener('mousemove', doResize);
+            document.removeEventListener('mouseup', stopResize);
+            document.removeEventListener('touchmove', doResize);
+            document.removeEventListener('touchend', stopResize);
+        }
+        
+        document.addEventListener('mousemove', doResize);
+        document.addEventListener('mouseup', stopResize);
+        document.addEventListener('touchmove', doResize);
+        document.addEventListener('touchend', stopResize);
     }
     
     // ========== PASSWORD FUNCTIONS ==========
@@ -568,17 +718,13 @@
         }
     }
     
-    // Open window or bring existing one to front
     function openOrFocusWindow(url, title) {
-        // Check if window already open
         const existing = openWindows.find(w => w.url === url && w.title === title);
         if (existing && existing.windowElement) {
-            // Bring to front
             existing.windowElement.style.zIndex = nextWindowZ++;
             existing.windowElement.style.display = 'flex';
             return;
         }
-        // Open new window
         openInDesktopWindow(url, title);
     }
     
@@ -692,7 +838,6 @@
                         <div class="folder-content" style="padding:15px; background:#fff; flex:1; display:flex; flex-wrap:wrap; gap:15px; align-content:flex-start; overflow-y:auto;"></div>`;
         document.body.appendChild(win);
         
-        // Fixed drag for folder window
         makeWindowDraggable(win, win.querySelector('.title-bar'));
         
         win.querySelector('.close-folder').onclick = () => win.remove();
@@ -713,12 +858,12 @@
         win.style.display = 'flex';
     }
     
-    // Fixed drag function that doesn't jump
     function makeWindowDraggable(element, dragHandle) {
         let offsetX = 0, offsetY = 0, mouseX = 0, mouseY = 0;
         let isDragging = false;
         
         dragHandle.onmousedown = startDrag;
+        dragHandle.ontouchstart = startDrag;
         
         function startDrag(e) {
             if (e.target.classList.contains('close-folder') || 
@@ -727,20 +872,26 @@
                 e.target.classList.contains('maximize-window')) return;
             e.preventDefault();
             isDragging = true;
-            mouseX = e.clientX;
-            mouseY = e.clientY;
+            const clientX = e.clientX ?? e.touches[0].clientX;
+            const clientY = e.clientY ?? e.touches[0].clientY;
+            mouseX = clientX;
+            mouseY = clientY;
             offsetX = element.offsetLeft;
             offsetY = element.offsetTop;
             document.onmouseup = stopDrag;
             document.onmousemove = drag;
+            document.ontouchend = stopDrag;
+            document.ontouchmove = drag;
             element.style.cursor = 'grabbing';
         }
         
         function drag(e) {
             if (!isDragging) return;
             e.preventDefault();
-            let dx = e.clientX - mouseX;
-            let dy = e.clientY - mouseY;
+            const clientX = e.clientX ?? e.touches[0].clientX;
+            const clientY = e.clientY ?? e.touches[0].clientY;
+            let dx = clientX - mouseX;
+            let dy = clientY - mouseY;
             let newLeft = offsetX + dx;
             let newTop = offsetY + dy;
             newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 100));
@@ -753,6 +904,8 @@
             isDragging = false;
             document.onmouseup = null;
             document.onmousemove = null;
+            document.ontouchend = null;
+            document.ontouchmove = null;
             element.style.cursor = '';
         }
     }
@@ -906,21 +1059,121 @@
     function renderStickers() {
         const existing = document.querySelectorAll('.sticker');
         existing.forEach(s => s.remove());
+        
         stickers.forEach(sticker => {
-            const div = document.createElement('div');
-            div.className = 'sticker';
-            div.style.left = sticker.x + 'px';
-            div.style.top = sticker.y + 'px';
-            div.innerHTML = `<div class="delete-sticker" data-id="${sticker.id}">✗</div>${sticker.isImage ? `<img src="${sticker.emoji}" style="width:48px; height:48px;">` : sticker.emoji}`;
-            document.querySelector('.desktop').appendChild(div);
-            makeDraggable(div, sticker.id, 'sticker');
-            div.querySelector('.delete-sticker')?.addEventListener('click', (e) => {
+            const stickerDiv = document.createElement('div');
+            stickerDiv.className = 'sticker';
+            stickerDiv.setAttribute('data-id', sticker.id);
+            stickerDiv.style.left = (sticker.x || 100) + 'px';
+            stickerDiv.style.top = (sticker.y || 100) + 'px';
+            
+            // Set initial dimensions
+            const width = sticker.width || 60;
+            const height = sticker.height || 60;
+            stickerDiv.style.width = width + 'px';
+            stickerDiv.style.height = height + 'px';
+            
+            const fontSize = sticker.fontSize || 48;
+            
+            if (sticker.isImage) {
+                stickerDiv.innerHTML = `<div class="delete-sticker" data-id="${sticker.id}">✗</div>
+                                       <div class="sticker-content" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
+                                           <img src="${escapeHtml(sticker.emoji)}" style="max-width:100%; max-height:100%; width:auto; height:auto;">
+                                       </div>`;
+            } else {
+                stickerDiv.innerHTML = `<div class="delete-sticker" data-id="${sticker.id}">✗</div>
+                                       <div class="sticker-content sticker-emoji" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:${fontSize}px; line-height:1;">
+                                           ${sticker.emoji}
+                                       </div>`;
+            }
+            
+            document.querySelector('.desktop').appendChild(stickerDiv);
+            makeStickerDraggable(stickerDiv, sticker.id);
+            makeStickerResizable(stickerDiv, sticker.id);
+            
+            // Click to select sticker
+            stickerDiv.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-sticker')) return;
+                e.stopPropagation();
+                selectSticker(sticker.id);
+            });
+            
+            // Delete sticker
+            stickerDiv.querySelector('.delete-sticker')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 stickers = stickers.filter(s => s.id !== sticker.id);
+                if (selectedStickerId === sticker.id) selectedStickerId = null;
                 saveAll();
                 renderStickers();
             });
         });
+        
+        // Click outside to deselect
+        document.querySelector('.desktop').addEventListener('click', (e) => {
+            if (!e.target.closest('.sticker')) {
+                document.querySelectorAll('.sticker').forEach(s => s.classList.remove('selected'));
+                if (hideHandlesTimeout) clearTimeout(hideHandlesTimeout);
+                selectedStickerId = null;
+            }
+        });
+    }
+    
+    function makeStickerDraggable(stickerDiv, stickerId) {
+        let offsetX = 0, offsetY = 0, mouseX = 0, mouseY = 0;
+        let isDragging = false;
+        
+        stickerDiv.onmousedown = startDrag;
+        stickerDiv.ontouchstart = startDrag;
+        
+        function startDrag(e) {
+            if (e.target.classList.contains('delete-sticker') || e.target.classList.contains('resize-handle')) return;
+            e.preventDefault();
+            isDragging = true;
+            const clientX = e.clientX ?? e.touches[0].clientX;
+            const clientY = e.clientY ?? e.touches[0].clientY;
+            mouseX = clientX;
+            mouseY = clientY;
+            offsetX = stickerDiv.offsetLeft;
+            offsetY = stickerDiv.offsetTop;
+            document.onmouseup = stopDrag;
+            document.onmousemove = drag;
+            document.ontouchend = stopDrag;
+            document.ontouchmove = drag;
+            stickerDiv.style.cursor = 'grabbing';
+            stickerDiv.style.zIndex = '1000';
+        }
+        
+        function drag(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            const clientX = e.clientX ?? e.touches[0].clientX;
+            const clientY = e.clientY ?? e.touches[0].clientY;
+            let dx = clientX - mouseX;
+            let dy = clientY - mouseY;
+            let newLeft = offsetX + dx;
+            let newTop = offsetY + dy;
+            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 50));
+            newTop = Math.max(0, Math.min(newTop, window.innerHeight - 50));
+            stickerDiv.style.left = newLeft + 'px';
+            stickerDiv.style.top = newTop + 'px';
+            
+            const sticker = stickers.find(s => s.id === stickerId);
+            if (sticker) {
+                sticker.x = newLeft;
+                sticker.y = newTop;
+                saveAll();
+            }
+        }
+        
+        function stopDrag() {
+            isDragging = false;
+            document.onmouseup = null;
+            document.onmousemove = null;
+            document.ontouchend = null;
+            document.ontouchmove = null;
+            stickerDiv.style.cursor = '';
+            stickerDiv.style.zIndex = '';
+        }
     }
     
     function renderWidgets() {
@@ -1013,13 +1266,9 @@
                         <div class="window-content"><iframe src="${url}" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"></iframe></div>`;
         document.body.appendChild(win);
         
-        // Add to taskbar
         const taskbarBtn = addTaskbarButton(windowId, title || 'Window', win);
-        
-        // Store window reference
         openWindows.push({ id: windowId, url: url, title: title, windowElement: win, taskbarBtn: taskbarBtn });
         
-        // Make window draggable with fixed function
         makeWindowDraggable(win, win.querySelector('.title-bar'));
         
         win.querySelector('.close-window').onclick = () => { 
@@ -1099,7 +1348,7 @@
             btn.style.margin = '5px';
             btn.style.cursor = 'pointer';
             btn.onclick = () => {
-                stickers.push({ id: Date.now(), emoji: emoji, isImage: false, x: Math.random() * (window.innerWidth - 100), y: Math.random() * (window.innerHeight - 200) });
+                stickers.push({ id: Date.now(), emoji: emoji, isImage: false, x: Math.random() * (window.innerWidth - 100), y: Math.random() * (window.innerHeight - 200), width: 60, height: 60, fontSize: 48 });
                 saveAll(); renderAll();
                 document.getElementById('stickerSelectorModal').style.display = 'none';
             };
@@ -1110,7 +1359,7 @@
     function addImageSticker() {
         const url = document.getElementById('stickerImageUrl').value.trim();
         if (url) {
-            stickers.push({ id: Date.now(), emoji: url, isImage: true, x: Math.random() * (window.innerWidth - 100), y: Math.random() * (window.innerHeight - 200) });
+            stickers.push({ id: Date.now(), emoji: url, isImage: true, x: Math.random() * (window.innerWidth - 100), y: Math.random() * (window.innerHeight - 200), width: 80, height: 80 });
             saveAll(); renderAll();
             document.getElementById('stickerSelectorModal').style.display = 'none';
             document.getElementById('stickerImageUrl').value = '';
