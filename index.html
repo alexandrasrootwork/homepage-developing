@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -387,9 +389,8 @@
 
 <!-- BOOT SCREEN - Must click to enter desktop -->
 <div class="boot-screen" id="bootScreen">
-    <div class="boot-logo"><div class="boot-logo">
-    <img src="images/Windows_95_FLYING_WINDOWS.png" style="width: 100px; height: 100px; image-rendering: pixelated;">
-</div>
+    <div class="boot-logo">
+        <img src="images/Windows_95_FLYING_WINDOWS.png" style="width: 100px; height: 100px; image-rendering: pixelated;">
     </div>
     <div class="boot-text">
         Starting Windows 95<span class="boot-dots" id="bootDots">...</span>
@@ -498,7 +499,8 @@
             icons = data.icons || [];
             folders = data.folders || [];
             stickers = data.stickers || [];
-            widgets = data.widgets || [];
+            // DO NOT load widgets from saved data - start fresh
+            widgets = [];
             recycleBin = data.recycleBin || [];
             currentWallpaper = data.currentWallpaper || '';
             currentTheme = data.currentTheme || 'teal';
@@ -1613,4 +1615,3 @@
 
 </body>
 </html>
-
