@@ -18,6 +18,7 @@
             vertical-align: top; background: transparent; border-radius: 2px;
         }
         .desktop-icon:hover, .folder-icon:hover { background: rgba(0,0,128,0.7); outline: 1px dotted white; }
+        .desktop-icon.drag-over, .folder-icon.drag-over { background: rgba(0,128,0,0.7); outline: 2px solid #00ff00; }
         .desktop-icon .icon-img, .folder-icon .icon-img { font-size: 48px; display: block; margin-bottom: 8px; pointer-events: none; }
         .desktop-icon img, .folder-icon img { width: 48px; height: 48px; display: block; margin: 0 auto 8px; pointer-events: none; }
         .icon-label { word-break: break-word; pointer-events: none; text-shadow: 1px 1px 0 #000; }
@@ -58,7 +59,7 @@
         .widget-content textarea { width: 100%; height: 100px; font-family: inherit; border: 1px solid #808080; background: white; padding: 4px; resize: vertical; }
         .close-widget { cursor: pointer; }
         
-        /* Windows (for opened links) */
+        /* Windows */
         .desktop-window {
             position: fixed; background: #c0c0c0; border: 2px solid #fff;
             border-right-color: #000; border-bottom-color: #000;
@@ -73,6 +74,36 @@
         .desktop-window .window-content { flex: 1; padding: 0; overflow: auto; background: white; }
         .desktop-window iframe { width: 100%; height: 100%; border: none; }
         .maximize-window, .close-window { cursor: pointer; margin-left: 6px; }
+        
+        /* Folder Window */
+        .folder-window {
+            position: fixed; background: #c0c0c0; border: 2px solid #fff;
+            border-right-color: #000; border-bottom-color: #000;
+            min-width: 400px; min-height: 300px; z-index: 1100; display: none;
+            flex-direction: column;
+        }
+        .folder-window .title-bar {
+            background: #000080; color: white; padding: 6px 8px;
+            display: flex; justify-content: space-between; cursor: move;
+        }
+        .folder-window .folder-content {
+            padding: 15px; background: #fff; flex: 1;
+            display: flex; flex-wrap: wrap; gap: 15px; align-content: flex-start;
+            min-height: 200px; overflow-y: auto;
+        }
+        .folder-item {
+            width: 80px; text-align: center; cursor: pointer; padding: 5px;
+            border-radius: 2px; position: relative;
+        }
+        .folder-item:hover { background: #000080; color: white; }
+        .folder-item .folder-item-img { font-size: 40px; display: block; margin-bottom: 5px; }
+        .folder-item .folder-item-label { font-size: 10px; word-break: break-word; }
+        .folder-item .remove-from-folder {
+            position: absolute; top: -5px; right: -5px; width: 16px; height: 16px;
+            background: #c0c0c0; border: 1px solid #000; border-radius: 10px;
+            font-size: 10px; cursor: pointer; display: none;
+        }
+        .folder-item:hover .remove-from-folder { display: block; }
         
         /* Taskbar */
         .taskbar {
@@ -132,20 +163,15 @@
             align-items: center; cursor: pointer;
         }
         .screensaver.active { display: flex; }
-        .recycle-window, .sticker-selector-window {
+        .recycle-window {
             position: fixed; top: 100px; left: 100px; width: 400px;
             background: #c0c0c0; border: 2px solid #fff; border-right-color: #000;
             border-bottom-color: #000; z-index: 1100; display: none;
         }
-        .folder-window {
-            position: fixed; background: #c0c0c0; border: 2px solid #fff;
-            border-right-color: #000; border-bottom-color: #000;
-            min-width: 300px; min-height: 200px; z-index: 1100; display: none;
-        }
         @media (max-width: 768px) {
             .icons-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px 10px; }
             .desktop-icon, .folder-icon { position: static !important; width: auto; margin: 0 auto; }
-            .desktop-window { top: 10px !important; left: 10px !important; right: 10px !important; bottom: 50px !important; width: auto !important; height: auto !important; min-width: unset; }
+            .desktop-window, .folder-window { top: 10px !important; left: 10px !important; right: 10px !important; bottom: 50px !important; width: auto !important; height: auto !important; min-width: unset; }
         }
     </style>
 </head>
@@ -205,6 +231,7 @@
     let currentWallpaper = '';
     let currentTheme = 'teal';
     let nextWindowZ = 2100;
+    let draggedIconId = null;
     
     function saveAll() {
         const allData = { icons, folders, stickers, widgets, recycleBin, currentWallpaper, currentTheme };
@@ -225,10 +252,10 @@
         }
         if (icons.length === 0) {
             icons = [
-                { id: Date.now(), label: "Bucket List", link: "bucketlist.html", image: "📝", x: 30, y: 30, dateAdded: Date.now(), pin: "" },
-                { id: Date.now()+1, label: "Comfort Corner", link: "comfort.html", image: "🧸", x: 130, y: 30, dateAdded: Date.now()+1, pin: "" },
-                { id: Date.now()+2, label: "Recipes", link: "recipes.html", image: "🍳", x: 230, y: 30, dateAdded: Date.now()+2, pin: "" },
-                { id: Date.now()+3, label: "Journal", link: "journal.html", image: "📔", x: 330, y: 30, dateAdded: Date.now()+3, pin: "" }
+                { id: Date.now(), label: "Bucket List", link: "bucketlist.html", image: "📝", x: 30, y: 30, dateAdded: Date.now(), pin: "", folderId: null },
+                { id: Date.now()+1, label: "Comfort Corner", link: "comfort.html", image: "🧸", x: 130, y: 30, dateAdded: Date.now()+1, pin: "", folderId: null },
+                { id: Date.now()+2, label: "Recipes", link: "recipes.html", image: "🍳", x: 230, y: 30, dateAdded: Date.now()+2, pin: "", folderId: null },
+                { id: Date.now()+3, label: "Journal", link: "journal.html", image: "📔", x: 330, y: 30, dateAdded: Date.now()+3, pin: "", folderId: null }
             ];
         }
         applyTheme();
@@ -249,10 +276,15 @@
         const container = document.getElementById('iconsContainer');
         const existing = container.querySelectorAll('.desktop-icon:not(.folder-icon)');
         existing.forEach(el => el.remove());
-        icons.forEach(icon => {
+        
+        // Only show icons that are on desktop (folderId === null)
+        const desktopIcons = icons.filter(icon => !icon.folderId);
+        
+        desktopIcons.forEach(icon => {
             const div = document.createElement('div');
             div.className = 'desktop-icon';
             div.setAttribute('data-id', icon.id);
+            div.setAttribute('draggable', 'true');
             const isEmoji = icon.image && (icon.image.length <= 4 || /[\u{1F300}-\u{1F9FF}]/u.test(icon.image));
             div.innerHTML = `<div class="icon-action-btn edit-icon-btn" data-id="${icon.id}">✏️</div>
                              <div class="icon-action-btn delete-icon-btn" data-id="${icon.id}">✗</div>
@@ -265,9 +297,177 @@
                 div.style.top = (icon.y || 30) + 'px';
                 makeDraggable(div, icon.id, 'icon');
             }
+            // Drag and drop for folders
+            div.setAttribute('draggable', 'true');
+            div.addEventListener('dragstart', (e) => {
+                draggedIconId = icon.id;
+                e.dataTransfer.setData('text/plain', icon.id);
+                div.classList.add('dragging');
+            });
+            div.addEventListener('dragend', () => {
+                draggedIconId = null;
+                div.classList.remove('dragging');
+                document.querySelectorAll('.folder-icon').forEach(f => f.classList.remove('drag-over'));
+            });
             container.appendChild(div);
         });
         attachIconEvents();
+    }
+    
+    function renderFolders() {
+        const container = document.getElementById('iconsContainer');
+        const existing = container.querySelectorAll('.folder-icon');
+        existing.forEach(el => el.remove());
+        
+        folders.forEach(folder => {
+            const div = document.createElement('div');
+            div.className = 'folder-icon';
+            div.setAttribute('data-id', folder.id);
+            div.innerHTML = `<div class="icon-action-btn edit-icon-btn" data-id="${folder.id}">✏️</div>
+                             <div class="icon-action-btn delete-icon-btn" data-id="${folder.id}">✗</div>
+                             <div class="icon-img">📁</div>
+                             <div class="icon-label">${escapeHtml(folder.name)}</div>`;
+            if (window.innerWidth > 768) {
+                div.style.position = 'absolute';
+                div.style.left = (folder.x || 30) + 'px';
+                div.style.top = (folder.y || 30) + 'px';
+                makeDraggable(div, folder.id, 'folder');
+            }
+            // Allow dropping icons onto folders
+            div.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                div.classList.add('drag-over');
+            });
+            div.addEventListener('dragleave', () => {
+                div.classList.remove('drag-over');
+            });
+            div.addEventListener('drop', (e) => {
+                e.preventDefault();
+                div.classList.remove('drag-over');
+                if (draggedIconId) {
+                    const icon = icons.find(i => i.id === draggedIconId);
+                    if (icon) {
+                        icon.folderId = folder.id;
+                        icon.x = 30;
+                        icon.y = 30;
+                        saveAll();
+                        renderAll();
+                        // Also refresh open folder window if open
+                        const folderWindow = document.getElementById(`folder-${folder.id}`);
+                        if (folderWindow && folderWindow.style.display === 'block') {
+                            refreshFolderWindow(folder.id);
+                        }
+                    }
+                }
+            });
+            container.appendChild(div);
+        });
+        
+        document.querySelectorAll('.folder-icon').forEach(el => {
+            const id = parseInt(el.dataset.id);
+            el.ondblclick = () => openFolder(id);
+            el.querySelector('.edit-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editFolderName(id); });
+            el.querySelector('.delete-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); deleteFolder(id); });
+        });
+    }
+    
+    function refreshFolderWindow(folderId) {
+        const folderWindow = document.getElementById(`folder-${folderId}`);
+        if (folderWindow && folderWindow.style.display === 'block') {
+            const content = folderWindow.querySelector('.folder-content');
+            if (content) renderFolderContents(folderId, content);
+        }
+    }
+    
+    function renderFolderContents(folderId, container) {
+        const folder = folders.find(f => f.id === folderId);
+        if (!folder) return;
+        const folderIcons = icons.filter(icon => icon.folderId === folderId);
+        container.innerHTML = '';
+        if (folderIcons.length === 0) {
+            container.innerHTML = '<div style="color:#999; text-align:center; width:100%; padding:20px;">📁 This folder is empty. Drag icons here to add them.</div>';
+        }
+        folderIcons.forEach(icon => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'folder-item';
+            const isEmoji = icon.image && (icon.image.length <= 4 || /[\u{1F300}-\u{1F9FF}]/u.test(icon.image));
+            itemDiv.innerHTML = `<div class="remove-from-folder" data-id="${icon.id}">✗</div>
+                                 ${isEmoji ? `<div class="folder-item-img">${icon.image || '📄'}</div>` : `<img src="${icon.image}" class="folder-item-img" style="width:40px; height:40px;">`}
+                                 <div class="folder-item-label">${escapeHtml(icon.label)}</div>`;
+            itemDiv.onclick = (e) => {
+                if (e.target.classList.contains('remove-from-folder')) return;
+                if (icon.pin) {
+                    const entered = prompt('Enter PIN to open:');
+                    if (entered !== icon.pin) { alert('Wrong PIN!'); return; }
+                }
+                if (icon.link) openInDesktopWindow(icon.link, icon.label);
+            };
+            itemDiv.querySelector('.remove-from-folder')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                icon.folderId = null;
+                saveAll();
+                renderAll();
+                refreshFolderWindow(folderId);
+            });
+            container.appendChild(itemDiv);
+        });
+    }
+    
+    function openFolder(id) {
+        const folder = folders.find(f => f.id === id);
+        if (!folder) return;
+        let win = document.getElementById(`folder-${id}`);
+        if (win) { win.style.display = 'flex'; win.style.zIndex = nextWindowZ++; return; }
+        win = document.createElement('div');
+        win.className = 'folder-window';
+        win.id = `folder-${id}`;
+        win.style.left = '150px';
+        win.style.top = '80px';
+        win.style.width = '450px';
+        win.style.height = '350px';
+        win.style.zIndex = nextWindowZ++;
+        win.innerHTML = `<div class="title-bar"><span>📁 ${escapeHtml(folder.name)}</span><span><span class="maximize-folder" style="cursor:pointer; margin-right:8px;">□</span><span class="close-folder" style="cursor:pointer;">✗</span></span></div>
+                        <div class="folder-content" style="padding:15px; background:#fff; flex:1; display:flex; flex-wrap:wrap; gap:15px; align-content:flex-start; overflow-y:auto;"></div>`;
+        document.body.appendChild(win);
+        
+        // Make draggable
+        const titleBar = win.querySelector('.title-bar');
+        let pos1=0,pos2=0,pos3=0,pos4=0;
+        titleBar.onmousedown = dragMouseDown;
+        function dragMouseDown(e) {
+            if (e.target.classList.contains('close-folder') || e.target.classList.contains('maximize-folder')) return;
+            e.preventDefault();
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            document.onmouseup = closeDrag;
+            document.onmousemove = elementDrag;
+        }
+        function elementDrag(e) {
+            e.preventDefault();
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            win.style.top = (win.offsetTop - pos2) + "px";
+            win.style.left = (win.offsetLeft - pos1) + "px";
+        }
+        function closeDrag() { document.onmouseup = null; document.onmousemove = null; }
+        
+        win.querySelector('.close-folder').onclick = () => win.remove();
+        win.querySelector('.maximize-folder').onclick = () => {
+            if (win.style.width === '100%') {
+                win.style.width = '450px'; win.style.height = '350px';
+                win.style.left = '150px'; win.style.top = '80px';
+            } else {
+                win.style.width = '100%'; win.style.height = 'calc(100% - 50px)';
+                win.style.left = '0'; win.style.top = '0';
+            }
+        };
+        win.onclick = () => win.style.zIndex = nextWindowZ++;
+        
+        const content = win.querySelector('.folder-content');
+        renderFolderContents(id, content);
+        win.style.display = 'flex';
     }
     
     function attachIconEvents() {
@@ -283,40 +483,11 @@
                 if (icon && icon.link) openInDesktopWindow(icon.link, icon.label);
             };
             el.oncontextmenu = (e) => { e.preventDefault(); openEditModal(id); return false; };
-            el.ondblclick = () => openEditModal(id);
             let pressTimer;
             el.ontouchstart = () => { pressTimer = setTimeout(() => { el.classList.add('long-press'); openEditModal(id); }, 800); };
             el.ontouchend = () => { clearTimeout(pressTimer); setTimeout(() => el.classList.remove('long-press'), 100); };
             el.querySelector('.edit-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(id); });
             el.querySelector('.delete-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); deleteIcon(id); });
-        });
-    }
-    
-    function renderFolders() {
-        const container = document.getElementById('iconsContainer');
-        const existing = container.querySelectorAll('.folder-icon');
-        existing.forEach(el => el.remove());
-        folders.forEach(folder => {
-            const div = document.createElement('div');
-            div.className = 'folder-icon';
-            div.setAttribute('data-id', folder.id);
-            div.innerHTML = `<div class="icon-action-btn edit-icon-btn" data-id="${folder.id}">✏️</div>
-                             <div class="icon-action-btn delete-icon-btn" data-id="${folder.id}">✗</div>
-                             <div class="icon-img">📁</div>
-                             <div class="icon-label">${escapeHtml(folder.name)}</div>`;
-            if (window.innerWidth > 768) {
-                div.style.position = 'absolute';
-                div.style.left = (folder.x || 30) + 'px';
-                div.style.top = (folder.y || 30) + 'px';
-                makeDraggable(div, folder.id, 'folder');
-            }
-            container.appendChild(div);
-        });
-        document.querySelectorAll('.folder-icon').forEach(el => {
-            const id = parseInt(el.dataset.id);
-            el.onclick = (e) => { if (!e.target.classList.contains('icon-action-btn')) openFolder(id); };
-            el.querySelector('.edit-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); editFolderName(id); });
-            el.querySelector('.delete-icon-btn')?.addEventListener('click', (e) => { e.stopPropagation(); deleteFolder(id); });
         });
     }
     
@@ -397,13 +568,12 @@
     }
     
     function updatePosition(type, id, x, y) {
-        if (type === 'icon') { const item = icons.find(i => i.id === id); if (item) { item.x = x; item.y = y; } }
+        if (type === 'icon') { const item = icons.find(i => i.id === id); if (item && !item.folderId) { item.x = x; item.y = y; } }
         else if (type === 'folder') { const item = folders.find(f => f.id === id); if (item) { item.x = x; item.y = y; } }
         else if (type === 'sticker') { const item = stickers.find(s => s.id === id); if (item) { item.x = x; item.y = y; } }
         else if (type === 'widget') { const item = widgets.find(w => w.id === id); if (item) { item.x = x; item.y = y; } }
     }
     
-    // Desktop Windows (for opening links)
     function openInDesktopWindow(url, title) {
         const windowId = 'win_' + Date.now() + '_' + Math.random();
         const zIndex = nextWindowZ++;
@@ -419,7 +589,6 @@
                         <div class="window-content"><iframe src="${url}" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"></iframe></div>`;
         document.body.appendChild(win);
         
-        // Make draggable
         const titleBar = win.querySelector('.title-bar');
         let pos1=0,pos2=0,pos3=0,pos4=0;
         titleBar.onmousedown = dragMouseDown;
@@ -455,14 +624,12 @@
         };
         win.onclick = () => { win.style.zIndex = nextWindowZ++; };
         
-        // Add to taskbar
         const taskbarWindows = document.getElementById('taskbarWindows');
         const taskbarBtn = document.createElement('div');
         taskbarBtn.className = 'taskbar-window-btn';
         taskbarBtn.innerText = title || 'Window';
         taskbarBtn.onclick = () => { win.style.zIndex = nextWindowZ++; win.style.display = 'flex'; };
         taskbarWindows.appendChild(taskbarBtn);
-        
         openWindows.push({ id: windowId, btn: taskbarBtn, win: win });
     }
     
@@ -493,43 +660,12 @@
     }
     
     function deleteFolder(id) {
-        if (confirm('Move folder to Recycle Bin?')) {
+        if (confirm('Move folder to Recycle Bin? Icons inside will return to desktop.')) {
+            // Move all icons in this folder back to desktop
+            icons.forEach(icon => { if (icon.folderId === id) icon.folderId = null; });
             const folder = folders.find(f => f.id === id);
             if (folder) { recycleBin.push({ ...folder, type: 'folder', deletedAt: Date.now() }); folders = folders.filter(f => f.id !== id); saveAll(); renderAll(); }
         }
-    }
-    
-    function openFolder(id) {
-        const folder = folders.find(f => f.id === id);
-        if (!folder) return;
-        let win = document.getElementById(`folder-${id}`);
-        if (win) { win.style.display = 'block'; return; }
-        win = document.createElement('div');
-        win.className = 'folder-window';
-        win.id = `folder-${id}`;
-        win.style.left = '150px';
-        win.style.top = '150px';
-        win.innerHTML = `<div class="title-bar"><span>📁 ${escapeHtml(folder.name)}</span><span style="cursor:pointer" class="close-folder">✗</span></div><div class="content" id="folder-content-${id}" style="padding:10px;"></div>`;
-        document.body.appendChild(win);
-        makeDraggable(win, id, 'window');
-        win.querySelector('.close-folder').addEventListener('click', () => win.remove());
-        const content = win.querySelector(`#folder-content-${id}`);
-        renderFolderContents(folder, content);
-        win.style.display = 'block';
-    }
-    
-    function renderFolderContents(folder, container) {
-        container.innerHTML = '';
-        (folder.items || []).forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'folder-icon';
-            div.style.display = 'inline-block';
-            div.style.width = '80px';
-            const isEmoji = item.image && (item.image.length <= 4);
-            div.innerHTML = `${isEmoji ? `<div class="icon-img">${item.image}</div>` : `<img src="${item.image}" width="32">`}<div class="icon-label">${escapeHtml(item.label)}</div>`;
-            div.onclick = () => { if (item.link) openInDesktopWindow(item.link, item.label); };
-            container.appendChild(div);
-        });
     }
     
     function editFolderName(id) {
@@ -590,7 +726,7 @@
     window.restoreFromBin = function(id) {
         const item = recycleBin.find(i => i.id === id);
         if (item) {
-            if (item.link !== undefined) icons.push({ ...item, id: Date.now() });
+            if (item.link !== undefined) icons.push({ ...item, id: Date.now(), folderId: null });
             else if (item.name) folders.push({ ...item, id: Date.now() });
             recycleBin = recycleBin.filter(i => i.id !== id);
             saveAll(); renderAll(); showRecycleBin();
@@ -627,7 +763,7 @@
             const idx = icons.findIndex(i => i.id === window.editingIconId);
             if (idx !== -1) { icons[idx].label = label; icons[idx].link = link || '#'; icons[idx].image = image; icons[idx].pin = pin; }
         } else {
-            icons.push({ id: Date.now(), label, link: link || '#', image, pin, x: 30 + icons.length * 20, y: 30 + icons.length * 20, dateAdded: Date.now() });
+            icons.push({ id: Date.now(), label, link: link || '#', image, pin, folderId: null, x: 30 + icons.length * 20, y: 30 + icons.length * 20, dateAdded: Date.now() });
         }
         saveAll(); renderAll(); document.getElementById('iconModal').style.display = 'none';
     };
